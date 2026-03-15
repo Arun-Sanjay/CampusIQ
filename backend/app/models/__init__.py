@@ -1,9 +1,13 @@
-"""Model package for Alembic autogenerate discovery.
-
-Import concrete model modules here as they are added so Alembic can load them
-before inspecting ``Base.metadata``.
-"""
+"""Model package for Alembic autogenerate discovery."""
 
 from app.core.database import Base
+from app.models.user import Document, StudentProfile, Subject, TeacherProfile, User
 
-__all__ = ["Base"]
+__all__ = [
+    "Base",
+    "Document",
+    "StudentProfile",
+    "Subject",
+    "TeacherProfile",
+    "User",
+]
