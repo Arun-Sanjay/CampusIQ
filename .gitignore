@@ -1,5 +1,24 @@
+# Environment
 .env
 backend/.env
 frontend/.env
+
+# Python
 backend/.venv
-node_modules
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+frontend/dist/
+.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Claude
+.claude/
+.idea/
+.vscode/

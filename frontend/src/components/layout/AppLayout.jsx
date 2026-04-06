@@ -1,59 +1,93 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useState } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
+import { clsx } from 'clsx'
+import Sidebar from './Sidebar'
+import TopBar from './TopBar'
+import GradientMesh from './GradientMesh'
+import PageTransition from './PageTransition'
 
-import { primaryNavLinks } from '../../utils/navigation'
+const pageTitles = {
+  '/student': 'Dashboard',
+  '/student/notes': 'AI Note Assistant',
+  '/student/college-gpt': 'CollegeGPT',
+  '/student/quizzes': 'Quiz Engine',
+  '/student/community': 'Doubt Community',
+  '/student/schedule': 'Study Schedule',
+  '/student/resume': 'Resume Builder',
+  '/student/skill-gap': 'Skill Gap Analyzer',
+  '/student/interview': 'Mock Interview',
+  '/student/confidence': 'Confidence Coach',
+  '/student/jobs': 'Job Tracker',
+  '/student/placement-chat': 'Placement Chat',
+  '/student/crash-mode': 'Crash Mode',
+  '/student/skill-tree': 'Skill Tree',
+  '/student/leaderboard': 'Leaderboard',
+  '/student/profile': 'My Profile',
+  '/teacher': 'Dashboard',
+  '/teacher/subjects': 'My Subjects',
+  '/teacher/documents': 'Documents',
+  '/teacher/quizzes': 'Quiz Management',
+  '/teacher/announcements': 'Announcements',
+  '/teacher/quiz-scheduling': 'Quiz Scheduling',
+  '/teacher/analytics': 'Class Performance',
+  '/teacher/students': 'Student Details',
+  '/teacher/similarity': 'Similarity Checker',
+  '/admin': 'Dashboard',
+  '/admin/college-docs': 'College Documents',
+  '/admin/users': 'User Management',
+  '/admin/skill-analytics': 'Skill Analytics',
+  '/admin/notifications': 'Notification Status',
+}
 
-const baseLinkClasses =
-  'rounded-full px-4 py-2 text-sm font-medium transition'
+function getRoleFromPath(pathname) {
+  if (pathname.startsWith('/teacher')) return 'teacher'
+  if (pathname.startsWith('/admin')) return 'admin'
+  return 'student'
+}
 
-function AppLayout() {
+export default function AppLayout() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const location = useLocation()
+  const role = getRoleFromPath(location.pathname)
+  const title = pageTitles[location.pathname] || 'CampusIQ'
+
+  const mockUser = { name: 'Arun Sanjay', email: 'arun@rvce.edu.in' }
+  const mockStats = { score: 67, streak: 5, level: 12 }
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-stone-100">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-0 h-80 w-80 -translate-x-1/2 rounded-full bg-amber-200/30 blur-3xl" />
-        <div className="absolute bottom-10 right-0 h-72 w-72 rounded-full bg-slate-300/20 blur-3xl" />
-      </div>
+    <div className="min-h-screen relative" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      {/* Premium gradient mesh background */}
+      <GradientMesh />
 
-      <div className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-        <header className="rounded-[2rem] border border-slate-200/70 bg-slate-950 px-5 py-4 shadow-[0_20px_60px_-35px_rgba(15,23,42,0.5)]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-amber-200">
-                CampusIQ
-              </p>
-              <p className="mt-2 max-w-xl text-sm text-slate-300">
-                V1 scaffold for AI-assisted academic workflows across students,
-                teachers, and admins.
-              </p>
-            </div>
+      <Sidebar
+        role={role}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        user={mockUser}
+      />
 
-            <nav className="flex flex-wrap gap-2">
-              {primaryNavLinks.map((link) => (
-                <NavLink
-                  key={link.to}
-                  to={link.to}
-                  className={({ isActive }) =>
-                    `${baseLinkClasses} ${
-                      isActive
-                        ? 'bg-amber-100 text-slate-950 shadow-[0_14px_40px_-22px_rgba(251,191,36,0.35)]'
-                        : 'bg-slate-900 text-slate-300 hover:bg-slate-800 hover:text-white'
-                    }`
-                  }
-                >
-                  {link.label}
-                </NavLink>
-              ))}
-            </nav>
-          </div>
-        </header>
+      <div
+        className={clsx(
+          'min-h-screen transition-all duration-300 flex flex-col relative z-10',
+          sidebarCollapsed ? 'ml-16' : 'ml-60',
+        )}
+      >
+        <TopBar
+          title={title}
+          streak={role === 'student' ? mockStats.streak : undefined}
+          level={role === 'student' ? mockStats.level : undefined}
+          score={role === 'student' ? mockStats.score : undefined}
+        />
 
-        <main className="flex-1 py-8">
-          <div className="rounded-[2rem] border border-stone-300/80 bg-stone-50 p-6 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.35)] sm:p-8">
-            <Outlet />
-          </div>
+        <main className="flex-1 p-6">
+          <AnimatePresence mode="wait">
+            <PageTransition key={location.pathname}>
+              <Outlet />
+            </PageTransition>
+          </AnimatePresence>
         </main>
       </div>
     </div>
   )
 }
-
-export default AppLayout
