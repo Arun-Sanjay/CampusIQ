@@ -336,3 +336,11 @@
     50% { filter: brightness(1.15); }
   }
 }
+
+@media print {
+  body * { visibility: hidden \!important; }
+  .print-resume, .print-resume * { visibility: visible \!important; }
+  .print-resume { position: absolute \!important; left: 0; top: 0; width: 100%; padding: 24px \!important; color: #000 \!important; background: #fff \!important; }
+  .print-resume h2, .print-resume h3, .print-resume p, .print-resume li, .print-resume span, .print-resume a { color: #000 \!important; }
+  .no-print { display: none \!important; }
+}

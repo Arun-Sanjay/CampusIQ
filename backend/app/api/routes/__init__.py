@@ -1,3 +1,37 @@
-from app.api.routes import analytics, auth, documents, flashcards, quizzes
+from app.api.routes import (
+    algorithms,
+    analytics,
+    announcements,
+    auth,
+    chat,
+    college_documents,
+    community,
+    dashboard,
+    documents,
+    gamification,
+    interviews,
+    jobs,
+    quizzes,
+    resume,
+    skills,
+    subjects,
+)
 
-__all__ = ["analytics", "auth", "documents", "flashcards", "quizzes"]
+__all__ = [
+    "algorithms",
+    "analytics",
+    "announcements",
+    "auth",
+    "chat",
+    "college_documents",
+    "community",
+    "dashboard",
+    "documents",
+    "gamification",
+    "interviews",
+    "jobs",
+    "quizzes",
+    "resume",
+    "skills",
+    "subjects",
+]

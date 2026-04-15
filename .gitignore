@@ -20,5 +20,6 @@ Thumbs.db
 
 # IDE / Claude
 .claude/
+CLAUDE.md
 .idea/
 .vscode/

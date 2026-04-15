@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import JSON, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+
+def _enum_values(enum_cls):
+    """Tell SQLAlchemy's Enum to send string VALUES, not Python enum NAMES."""
+    return [e.value for e in enum_cls]
 
 
 class UserRole(str, enum.Enum):
@@ -16,22 +21,38 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
 
 
+class College(Base):
+    __tablename__ = "colleges"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    location: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    users: Mapped[list["User"]] = relationship(back_populates="college")
+
+
 class User(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    full_name: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role"),
+        Enum(UserRole, name="user_role", values_callable=_enum_values),
         index=True,
-    )
-    hashed_password: Mapped[str] = mapped_column(String(255))
-    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
         nullable=False,
+    )
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    college_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("colleges.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -40,19 +61,22 @@ class User(Base):
         nullable=False,
     )
 
+    college: Mapped["College | None"] = relationship(back_populates="users")
     student_profile: Mapped["StudentProfile | None"] = relationship(
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
     teacher_profile: Mapped["TeacherProfile | None"] = relationship(
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
-    owned_subjects: Mapped[list["Subject"]] = relationship(back_populates="teacher")
+    owned_subjects: Mapped[list["Subject"]] = relationship(
+        back_populates="teacher",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
     uploaded_documents: Mapped[list["Document"]] = relationship(
-        back_populates="uploaded_by"
+        back_populates="uploaded_by",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 
@@ -61,16 +85,26 @@ class StudentProfile(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        unique=True,
-        nullable=False,
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
-    institution_name: Mapped[str | None] = mapped_column(String(255))
-    program_name: Mapped[str | None] = mapped_column(String(255))
+    # Academic info
+    branch: Mapped[str | None] = mapped_column(String(100))
+    semester: Mapped[int | None] = mapped_column(Integer)
+    cgpa: Mapped[float | None] = mapped_column(Numeric(4, 2))
+    # External profiles
+    github_url: Mapped[str | None] = mapped_column(String(500))
+    linkedin_url: Mapped[str | None] = mapped_column(String(500))
+    # Skills and targets (JSON arrays)
+    skills: Mapped[list | None] = mapped_column(JSON, default=list)
+    target_companies: Mapped[list | None] = mapped_column(JSON, default=list)
+    target_role: Mapped[str | None] = mapped_column(String(255))
+    # Gamification
+    xp_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    current_level: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    streak_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_active_date: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     user: Mapped["User"] = relationship(back_populates="student_profile")
@@ -81,41 +115,50 @@ class TeacherProfile(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        unique=True,
-        nullable=False,
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
     department_name: Mapped[str | None] = mapped_column(String(255))
     designation: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     user: Mapped["User"] = relationship(back_populates="teacher_profile")
 
 
+# ── Subject + Document live here for now (single source of truth for backrefs) ──
 class Subject(Base):
     __tablename__ = "subjects"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     teacher_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    college_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("colleges.id", ondelete="CASCADE"), index=True
     )
     code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(String(500))
+    semester: Mapped[int | None] = mapped_column(Integer)
+    branch: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     teacher: Mapped["User"] = relationship(back_populates="owned_subjects")
-    documents: Mapped[list["Document"]] = relationship(back_populates="subject")
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="subject",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class DocumentStatus(str, enum.Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    READY = "ready"
+    FAILED = "failed"
 
 
 class Document(Base):
@@ -123,24 +166,28 @@ class Document(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     subject_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("subjects.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True
     )
     uploaded_by_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     title: Mapped[str] = mapped_column(String(255))
     file_name: Mapped[str] = mapped_column(String(255))
     storage_path: Mapped[str] = mapped_column(String(500))
     content_type: Mapped[str | None] = mapped_column(String(100))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
+    file_size_bytes: Mapped[int | None] = mapped_column(Integer)
+    summary: Mapped[str | None] = mapped_column(String)
+    processing_status: Mapped[DocumentStatus] = mapped_column(
+        Enum(DocumentStatus, name="document_status", values_callable=_enum_values),
+        default=DocumentStatus.PENDING,
         nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     subject: Mapped["Subject"] = relationship(back_populates="documents")
     uploaded_by: Mapped["User"] = relationship(back_populates="uploaded_documents")
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
