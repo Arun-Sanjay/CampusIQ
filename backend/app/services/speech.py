@@ -1,18 +1,21 @@
-"""Speech pipeline for Phase 20 — Whisper ASR + ElevenLabs TTS.
+"""Speech pipeline for Phase 20 — ElevenLabs Scribe ASR + ElevenLabs TTS.
 
 Both sides are lazy-cached so missing keys don't crash the app at import time.
 Every function returns a non-raising sentinel (empty string / None) and logs
 the root cause so the calling service can decide whether to fall back.
 
-Why two vendors?
-----------------
-- OpenAI Whisper (`whisper-1`) is the cheapest, most accurate multilingual
-  transcription available via API — ~$0.006/min. The mock-interview and
-  confidence-coach flows both use it, so it lives here once.
-- ElevenLabs is the demo showstopper: 5 distinct human voices map to the 5
-  interview rounds so the candidate experiences a different interviewer voice
-  at each stage. We're on the starter plan (~10k chars/mo) so every TTS call
-  is metered and rate-limited — see `is_tts_available()` / cost guard below.
+Why one vendor?
+---------------
+ElevenLabs Scribe (`scribe_v1`) handles transcription, the same key powers
+TTS, so a single ELEVENLABS_API_KEY is enough for the whole voice pipeline.
+The TTS side is the demo showstopper: 5 distinct human voices map to the 5
+interview rounds so the candidate experiences a different interviewer at
+each stage. The starter plan is metered, so we still rate-limit prompts —
+see `is_tts_available()` / cost guard below.
+
+If `OPENAI_API_KEY` is set, the OpenAI Whisper path remains as an opt-in
+fallback for users who already have one — but ElevenLabs Scribe is the
+default ASR path now.
 
 Audio files are written to `backend/uploads/audio/` and served by FastAPI's
 `StaticFiles` mount (added in `main.py`). We keep the returned URL relative
@@ -20,9 +23,9 @@ so the frontend can prepend the API base URL without knowing about the mount.
 
 Format notes
 ------------
-- Whisper accepts webm/wav/mp3/m4a/ogg/flac — the browser's MediaRecorder
+- Scribe accepts webm/wav/mp3/m4a/ogg/flac — the browser's MediaRecorder
   defaults to `audio/webm;codecs=opus` which is perfect.
-- ElevenLabs output is MP3 (`mp3_44100_128`) by default. We keep that.
+- ElevenLabs TTS output is MP3 (`mp3_44100_128`) by default. We keep that.
 """
 from __future__ import annotations
 
@@ -106,12 +109,21 @@ def purge_old_audio(*, retention_days: int) -> dict[str, int]:
 
 
 # ════════════════════════════════════════════════════════════════
-# OpenAI Whisper (ASR)
+# Speech-to-text (ASR)
 # ════════════════════════════════════════════════════════════════
+#
+# Default path: ElevenLabs Scribe (`scribe_v1`) — same key as TTS.
+# Opt-in fallback: OpenAI Whisper, only if `OPENAI_API_KEY` is set.
+
+SCRIBE_MODEL_ID = "scribe_v1"
+
 
 @lru_cache(maxsize=1)
 def _get_openai_client():
-    """Return a cached OpenAI client, or None if the key isn't set."""
+    """Return a cached OpenAI client, or None if the key isn't set.
+
+    Kept as an opt-in fallback. ElevenLabs Scribe is the default ASR path.
+    """
     settings = get_settings()
     if not settings.openai_api_key:
         return None
@@ -128,31 +140,39 @@ def _get_openai_client():
 
 
 def is_asr_available() -> bool:
-    """True if Whisper transcription can be performed."""
-    return _get_openai_client() is not None
+    """True if any transcription backend is configured."""
+    return _get_elevenlabs_client() is not None or _get_openai_client() is not None
 
 
-def transcribe_audio(
-    audio_bytes: bytes,
-    *,
-    filename: str = "audio.webm",
-    language: str | None = "en",
-) -> str:
-    """Transcribe a chunk of audio using Whisper. Returns plain text.
+def _transcribe_with_elevenlabs(audio_bytes: bytes, filename: str, language: str | None) -> str:
+    client = _get_elevenlabs_client()
+    if client is None:
+        return ""
+    buffer = io.BytesIO(audio_bytes)
+    buffer.name = filename
+    try:
+        result = client.speech_to_text.convert(
+            model_id=SCRIBE_MODEL_ID,
+            file=buffer,
+            language_code=language or None,
+        )
+    except Exception as e:
+        logger.exception("ElevenLabs Scribe transcription failed: %s", e)
+        return ""
+    text = getattr(result, "text", None)
+    if isinstance(text, str):
+        return text.strip()
+    if isinstance(result, str):
+        return result.strip()
+    return ""
 
-    Never raises — returns "" and logs on failure so the caller can decide
-    whether the empty transcript is recoverable.
-    """
+
+def _transcribe_with_whisper(audio_bytes: bytes, filename: str, language: str | None) -> str:
     client = _get_openai_client()
     if client is None:
-        logger.warning("Whisper transcription skipped: OPENAI_API_KEY missing")
         return ""
-    if not audio_bytes:
-        return ""
-
-    # The OpenAI SDK accepts a (name, bytes, mime) tuple for streaming uploads.
     buffer = io.BytesIO(audio_bytes)
-    buffer.name = filename  # the SDK uses `name` to sniff the mime type
+    buffer.name = filename
     try:
         result = client.audio.transcriptions.create(
             model="whisper-1",
@@ -163,13 +183,37 @@ def transcribe_audio(
     except Exception as e:
         logger.exception("Whisper transcription failed: %s", e)
         return ""
-
-    # The SDK returns a plain string when response_format="text", but some
-    # versions wrap it in an object with a .text attribute — handle both.
     if isinstance(result, str):
         return result.strip()
     text = getattr(result, "text", None)
     return text.strip() if isinstance(text, str) else ""
+
+
+def transcribe_audio(
+    audio_bytes: bytes,
+    *,
+    filename: str = "audio.webm",
+    language: str | None = "en",
+) -> str:
+    """Transcribe a chunk of audio. Returns plain text or "" on failure.
+
+    Tries ElevenLabs Scribe first; falls back to OpenAI Whisper if Scribe
+    returned empty / wasn't configured. Never raises — callers decide whether
+    an empty transcript is recoverable.
+    """
+    if not audio_bytes:
+        return ""
+
+    if _get_elevenlabs_client() is not None:
+        text = _transcribe_with_elevenlabs(audio_bytes, filename, language)
+        if text:
+            return text
+
+    if _get_openai_client() is not None:
+        return _transcribe_with_whisper(audio_bytes, filename, language)
+
+    logger.warning("ASR skipped: neither ELEVENLABS_API_KEY nor OPENAI_API_KEY is set")
+    return ""
 
 
 # ════════════════════════════════════════════════════════════════
