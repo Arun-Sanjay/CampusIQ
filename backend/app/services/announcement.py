@@ -6,12 +6,14 @@ or any subject they could see.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.models.algorithm import NotificationType
 from app.models.content import Announcement, AnnouncementTarget
 from app.models.user import Subject, User, UserRole
 from app.schemas.announcement import (
@@ -19,6 +21,8 @@ from app.schemas.announcement import (
     AnnouncementResponse,
     AnnouncementUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -144,7 +148,52 @@ def create_announcement(
     db.commit()
     db.refresh(announcement)
 
+    # Fan out a real-time notification to every student (Phase 9). Failures
+    # here must never block the create flow.
+    try:
+        _notify_students(db, announcement, subject)
+    except Exception:  # noqa: BLE001
+        logger.exception("Failed to fan out notification for announcement %s", announcement.id)
+
     return _to_response(announcement, author=user, subject=subject)
+
+
+def _notify_students(
+    db: Session, announcement: Announcement, subject: Subject | None
+) -> None:
+    """Broadcast a NotificationDelivery row + WebSocket push to every student.
+
+    Scope is intentionally simple — every student in the system gets the ping.
+    Refining by college / subject enrollment is a v2 problem.
+    """
+    from app.services import notifications
+
+    student_ids = list(
+        db.scalars(select(User.id).where(User.role == UserRole.STUDENT)).all()
+    )
+    if not student_ids:
+        return
+
+    title = announcement.title
+    body = announcement.body
+    subject_label = subject.code if subject else None
+    content = (
+        f"[{subject_label}] {body}" if subject_label else body
+    )
+    extra = {
+        "announcement_id": str(announcement.id),
+        "subject_code": subject_label,
+    }
+    for sid in student_ids:
+        notifications.publish_sync(
+            db,
+            user_id=sid,
+            notification_type=NotificationType.ANNOUNCEMENT,
+            title=title,
+            content=content,
+            extra=extra,
+        )
+    db.commit()
 
 
 def update_announcement(

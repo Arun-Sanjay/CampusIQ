@@ -65,3 +65,107 @@ export interface DashboardResponse {
   recent_activity: DashboardActivityItem[]
   announcements: Announcement[]
 }
+
+// ── Teacher dashboard ──
+
+import type { DocumentProcessingStatus } from './content'
+
+export interface TeacherStat {
+  label: string
+  value: string
+  trend: number | null
+}
+
+export interface RecentUploadRow {
+  id: string
+  name: string
+  subject_code: string | null
+  subject_name: string | null
+  created_at: string
+  status: DocumentProcessingStatus
+}
+
+export interface TeacherDashboardResponse {
+  teacher_id: string
+  full_name: string
+  department: string | null
+  stats: TeacherStat[]
+  recent_uploads: RecentUploadRow[]
+  class_average: number | null
+  students_total: number
+}
+
+// ── Admin dashboard ──
+
+export interface AdminStat {
+  label: string
+  value: string
+  trend: number | null
+}
+
+export type AdminUserRole = 'student' | 'teacher' | 'admin'
+
+export interface UserBreakdownRow {
+  role: AdminUserRole
+  count: number
+}
+
+export interface PlatformActivityItem {
+  text: string
+  created_at: string
+}
+
+export interface PlatformHealth {
+  api_response_ms: number
+  storage_used_gb: number
+  storage_quota_gb: number
+  uptime_pct: number
+}
+
+export interface AdminDashboardResponse {
+  stats: AdminStat[]
+  user_breakdown: UserBreakdownRow[]
+  recent_activity: PlatformActivityItem[]
+  platform_health: PlatformHealth
+}
+
+// ── Admin user list ──
+
+export interface AdminUserRow {
+  id: string
+  email: string
+  full_name: string
+  role: AdminUserRole
+  is_active: boolean
+  branch: string | null
+  semester: number | null
+  department: string | null
+  last_login: string | null
+  created_at: string
+}
+
+export interface AdminUserListResponse {
+  total: number
+  items: AdminUserRow[]
+}
+
+// ── Per-student detail ──
+
+export interface StudentQuizScore {
+  quiz_id: string
+  label: string
+  value: number
+  completed_at: string
+}
+
+export interface StudentDetailResponse {
+  student_id: string
+  name: string
+  branch: string | null
+  semester: number | null
+  quiz_scores: StudentQuizScore[]
+  weak_areas: string[]
+  xp_total: number
+  streak_days: number
+  community_contributions: number
+}

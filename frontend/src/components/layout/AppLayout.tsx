@@ -6,7 +6,9 @@ import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 import GradientMesh from './GradientMesh'
 import PageTransition from './PageTransition'
+import NotificationToasts from './NotificationToasts'
 import { useAuthStore } from '../../store/authStore'
+import { useNotificationsSocket } from '../../hooks/useNotificationsSocket'
 
 type Role = 'student' | 'teacher' | 'admin'
 
@@ -26,6 +28,7 @@ const pageTitles: Record<string, string> = {
   '/student/crash-mode': 'Crash Mode',
   '/student/skill-tree': 'Skill Tree',
   '/student/leaderboard': 'Leaderboard',
+  '/student/boss-battles': 'Boss Battles',
   '/student/profile': 'My Profile',
   '/teacher': 'Dashboard',
   '/teacher/subjects': 'My Subjects',
@@ -53,6 +56,8 @@ export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
+  // Phase 9 — open the notifications WebSocket once we know who's logged in.
+  useNotificationsSocket()
   const role: Role = user?.role ?? getRoleFromPath(location.pathname)
   const title = pageTitles[location.pathname] || 'CampusIQ'
 
@@ -103,6 +108,8 @@ export default function AppLayout() {
           </AnimatePresence>
         </main>
       </div>
+
+      <NotificationToasts />
     </div>
   )
 }

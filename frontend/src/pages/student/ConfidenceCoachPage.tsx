@@ -35,6 +35,7 @@ import ProgressBar from '../../components/ui/ProgressBar'
 import type { ProgressBarColor } from '../../components/ui/ProgressBar'
 import { useMediaRecorder } from '../../hooks/useMediaRecorder'
 import { useBrowserSpeechRecognition } from '../../hooks/useBrowserSpeechRecognition'
+import { useConfidenceTracker } from '../../hooks/useConfidenceTracker'
 import { confidenceApi, ApiError, API_BASE_URL } from '../../api/client'
 import type {
   ConfidenceMetric,
@@ -73,11 +74,12 @@ type Metric = ProgressMetric | BadgeMetric
 
 const FALLBACK_PROMPT = 'Tell me about a time you led a team project'
 
-// MediaPipe placeholder estimates — Phase 21 will compute these from video frames.
-// For now we send a sensible baseline so the backend score still includes
-// posture + eye-contact contributions instead of dropping them.
-const PLACEHOLDER_EYE_CONTACT = 78
-const PLACEHOLDER_POSTURE = 82
+// Used only when MediaPipe is unavailable (offline / unsupported browser) so
+// the backend score still includes posture + eye-contact contributions instead
+// of dropping them. When MediaPipe is reachable, real per-frame measurements
+// replace these.
+const FALLBACK_EYE_CONTACT = 78
+const FALLBACK_POSTURE = 82
 
 function formatSeconds(secs: number): string {
   const m = Math.floor(secs / 60)
@@ -217,6 +219,7 @@ export default function ConfidenceCoachPage() {
   // Live recording (video + audio)
   const recorder = useMediaRecorder({ video: true })
   const speech = useBrowserSpeechRecognition()
+  const tracker = useConfidenceTracker()
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
   const [timeline, setTimeline] = useState<ConfidenceTimelineResponse | null>(null)
@@ -240,8 +243,8 @@ export default function ConfidenceCoachPage() {
       const data = await confidenceApi.timeline()
       setTimeline(data)
       setLatest(data.latest)
-    } catch (err) {
-      console.error('Failed to load confidence timeline', err)
+    } catch {
+      // Timeline endpoint may be unreachable; the page still renders empty-state UI.
     } finally {
       setLoadingTimeline(false)
     }
@@ -285,10 +288,27 @@ export default function ConfidenceCoachPage() {
     if (speech.supported) {
       speech.start()
     }
-  }, [previewUrl, recorder, speech])
+    // Spin up MediaPipe tracking once the camera stream is live so we can
+    // sample eye-contact + posture per frame and replace the placeholders.
+    if (recorder.stream) {
+      void tracker.start(recorder.stream)
+    }
+  }, [previewUrl, recorder, speech, tracker])
+
+  // The recorder.stream becomes available a tick after recorder.start() — start
+  // tracking as soon as it's ready, in case start() raced ahead.
+  useEffect(() => {
+    if (recorder.state === 'recording' && recorder.stream && !tracker.running) {
+      void tracker.start(recorder.stream)
+    }
+    // We deliberately skip `tracker` in deps to avoid retriggering when
+    // running flips back to false at end of session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recorder.state, recorder.stream])
 
   const handleStop = useCallback(async () => {
     if (speech.supported) speech.stop()
+    const trackerSamples = tracker.stop()
     const result = await recorder.stop()
     if (!result) return
     const url = makeAudioUrl(result.blob)
@@ -300,19 +320,26 @@ export default function ConfidenceCoachPage() {
     setSubmitError(null)
     try {
       const transcript = (speech.transcript || '').trim()
+      const eyeContactPct =
+        trackerSamples.avgEyeContact != null
+          ? trackerSamples.avgEyeContact
+          : FALLBACK_EYE_CONTACT
+      const posturePct =
+        trackerSamples.avgPosture != null
+          ? trackerSamples.avgPosture
+          : FALLBACK_POSTURE
       const session = await confidenceApi.submit({
         audioBlob: result.blob,
         prompt,
         durationSeconds: result.durationSeconds,
-        eyeContactPct: PLACEHOLDER_EYE_CONTACT,
-        posturePct: PLACEHOLDER_POSTURE,
+        eyeContactPct,
+        posturePct,
         browserTranscript: transcript || null,
       })
       setLatest(session)
       // Refresh the full timeline so the chart picks up the new session.
       void loadTimeline()
     } catch (err) {
-      console.error('Confidence submit failed', err)
       setSubmitError(
         err instanceof ApiError
           ? typeof err.detail === 'string'
@@ -325,7 +352,7 @@ export default function ConfidenceCoachPage() {
     } finally {
       setSubmitting(false)
     }
-  }, [loadTimeline, prompt, recorder, speech])
+  }, [loadTimeline, prompt, recorder, speech, tracker])
 
   const isRecording = recorder.state === 'recording'
   const isPreparing = recorder.state === 'preparing'
@@ -403,6 +430,17 @@ export default function ConfidenceCoachPage() {
               <div className="absolute top-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded-full bg-danger/90 text-white text-xs font-semibold shadow-lg">
                 <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
                 REC · {formatSeconds(recorder.elapsed)}
+              </div>
+            )}
+            {isRecording && tracker.available && (
+              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/55 text-white text-[11px] tabular-nums shadow-lg">
+                {tracker.liveEyeContact != null && tracker.livePosture != null ? (
+                  <>
+                    eye {tracker.liveEyeContact}% · posture {tracker.livePosture}%
+                  </>
+                ) : (
+                  <>warming up tracker…</>
+                )}
               </div>
             )}
             {isPreparing && (

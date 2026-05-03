@@ -1,7 +1,9 @@
 from fastapi import APIRouter
 
 from app.api.routes import (
+    admin,
     algorithms,
+    boss_battles,
     analytics,
     announcements,
     auth,
@@ -14,6 +16,7 @@ from app.api.routes import (
     gamification,
     interviews,
     jobs,
+    notifications,
     quizzes,
     resume,
     skills,
@@ -44,3 +47,6 @@ api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(community.router, prefix="/community", tags=["community"])
 api_router.include_router(gamification.router, prefix="/gamification", tags=["gamification"])
 api_router.include_router(algorithms.router, prefix="/algorithms", tags=["algorithms"])
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_router.include_router(notifications.router, prefix="/ws", tags=["websockets"])
+api_router.include_router(boss_battles.router, prefix="/boss-battles", tags=["boss-battles"])

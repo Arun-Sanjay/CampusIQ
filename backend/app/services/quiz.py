@@ -461,6 +461,27 @@ def submit_attempt(
     db.commit()
     db.refresh(attempt)
 
+    # Phase 9 — push a real-time notification to the student.
+    try:
+        from app.models.algorithm import NotificationType
+        from app.services import notifications as notifications_service
+
+        notifications_service.publish_sync(
+            db,
+            user_id=user.id,
+            notification_type=NotificationType.QUIZ_RESULT,
+            title=f"Quiz scored: {quiz.title}",
+            content=f"You scored {score_percent:.0f}% ({correct_count}/{total} correct).",
+            extra={
+                "quiz_id": str(quiz.id),
+                "attempt_id": str(attempt.id),
+                "score_percent": score_percent,
+            },
+        )
+        db.commit()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Quiz attempt notification failed: %s", e)
+
     # Weak-topic detection on this attempt only (the route can also call
     # compute_weak_areas() for the full historical view)
     topic_results: dict[str, list[bool]] = defaultdict(list)

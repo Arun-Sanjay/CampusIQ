@@ -159,8 +159,8 @@ export default function MockInterviewPage() {
       .then((data) => {
         if (!cancelled) setCapabilities(data)
       })
-      .catch((err) => {
-        console.warn('voice capabilities fetch failed', err)
+      .catch(() => {
+        // Capabilities endpoint may be unreachable; fall back to browser-only voice support.
       })
     return () => {
       cancelled = true

@@ -5,7 +5,7 @@ import {
   Calendar, FileText, Target, Mic, Video, Briefcase, MessageCircle,
   Zap, Trophy, User, Settings, ChevronLeft, ChevronRight,
   Upload, BarChart3, Users, Shield, Bell, ClipboardList,
-  GitBranch, AlertTriangle, LogOut,
+  GitBranch, AlertTriangle, LogOut, Swords,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
@@ -53,6 +53,7 @@ const studentNav: NavSection[] = [
     items: [
       { to: '/student/skill-tree', icon: GitBranch, label: 'Skill Tree' },
       { to: '/student/leaderboard', icon: Trophy, label: 'Leaderboard' },
+      { to: '/student/boss-battles', icon: Swords, label: 'Boss Battles' },
       { to: '/student/profile', icon: User, label: 'My Profile' },
     ],
   },

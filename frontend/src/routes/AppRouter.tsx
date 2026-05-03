@@ -33,6 +33,7 @@ import CrashModePage from '../pages/student/CrashModePage'
 import SkillTreePage from '../pages/student/SkillTreePage'
 import LeaderboardPage from '../pages/student/LeaderboardPage'
 import ProfilePage from '../pages/student/ProfilePage'
+import BossBattlesPage from '../pages/student/BossBattlesPage'
 
 // Teacher pages
 import TeacherDashboard from '../pages/teacher/DashboardPage'
@@ -85,6 +86,7 @@ const router = createBrowserRouter(
           <Route path="skill-tree" element={<SkillTreePage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="boss-battles" element={<BossBattlesPage />} />
         </Route>
       </Route>
 

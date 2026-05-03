@@ -1,5 +1,6 @@
 export * from './algorithms'
 export * from './announcement'
+export * from './bossBattles'
 export * from './auth'
 export * from './chat'
 export * from './common'

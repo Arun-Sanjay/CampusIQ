@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     # ── Rate limiting (used in Phase 21) ──
     claude_requests_per_minute: int = 20  # per-user limit to prevent runaway costs
 
+    # ── Audio storage retention (Phase 6) ──
+    # Recordings older than this are purged on a periodic background task.
+    audio_retention_days: int = 7
+    # How often the cleanup loop wakes up. Set to 0 to disable.
+    audio_cleanup_interval_hours: int = 6
+
 
 @lru_cache
 def get_settings() -> Settings:

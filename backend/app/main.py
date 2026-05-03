@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,12 +12,61 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+logger = logging.getLogger(__name__)
+
+
+async def _audio_cleanup_loop() -> None:
+    """Periodically purge stale audio files. Cancelled on shutdown."""
+    from app.services import speech as speech_service
+
+    interval_hours = settings.audio_cleanup_interval_hours
+    retention_days = settings.audio_retention_days
+    if interval_hours <= 0 or retention_days <= 0:
+        logger.info("audio cleanup loop disabled (interval=%s, retention=%s)", interval_hours, retention_days)
+        return
+    interval_seconds = interval_hours * 3600
+    while True:
+        try:
+            report = speech_service.purge_old_audio(retention_days=retention_days)
+            if report["deleted"]:
+                logger.info("audio cleanup tick: %s", report)
+        except Exception:  # noqa: BLE001 - never let one tick kill the loop
+            logger.exception("audio cleanup tick failed")
+        try:
+            await asyncio.sleep(interval_seconds)
+        except asyncio.CancelledError:
+            return
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     # Startup: eager-import all models so SQLAlchemy registers them
     import app.models  # noqa: F401
-    yield
+
+    # Phase 9 — capture the running loop so sync handlers can dispatch
+    # WebSocket sends onto the right loop via run_coroutine_threadsafe.
+    from app.services import notifications as notifications_service
+
+    notifications_service.set_main_loop(asyncio.get_running_loop())
+
+    # Run a single audio purge on startup so a long downtime is reflected
+    # immediately, then schedule the periodic loop.
+    from app.services import speech as speech_service
+
+    try:
+        speech_service.purge_old_audio(retention_days=settings.audio_retention_days)
+    except Exception:  # noqa: BLE001
+        logger.exception("startup audio purge failed")
+
+    cleanup_task = asyncio.create_task(_audio_cleanup_loop(), name="audio-cleanup")
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 
 def create_application() -> FastAPI:

@@ -19,6 +19,11 @@ import type {
   ChatSessionCreate,
   ChatSessionWithMessages,
   ChatType,
+  AdminDashboardResponse,
+  AdminUserListResponse,
+  BossBattleDetail,
+  BossBattleListResponse,
+  BossBattleSubmitResponse,
   ClassAnalytics,
   CollegeDocument,
   CollegeDocumentCategory,
@@ -68,8 +73,10 @@ import type {
   SignupRequest,
   SkillNodeResponse,
   SkillTreeResponse,
+  StudentDetailResponse,
   StudyOptimizerHistoryRow,
   Subject,
+  TeacherDashboardResponse,
   SubjectCreate,
   SubjectUpdate,
   TokenResponse,
@@ -360,6 +367,27 @@ export const quizzesApi = {
 
 export const dashboardApi = {
   me: () => api.get<DashboardResponse>('/dashboard/me'),
+  teacher: () => api.get<TeacherDashboardResponse>('/dashboard/teacher'),
+  admin: () => api.get<AdminDashboardResponse>('/dashboard/admin'),
+}
+
+// ── Admin (Phase 4 wiring) ──
+
+export const adminApi = {
+  listUsers: (params?: {
+    role?: 'student' | 'teacher' | 'admin' | 'all'
+    search?: string
+    limit?: number
+    offset?: number
+  }) => {
+    const qs = new URLSearchParams()
+    if (params?.role) qs.set('role', params.role)
+    if (params?.search) qs.set('search', params.search)
+    if (params?.limit != null) qs.set('limit', String(params.limit))
+    if (params?.offset != null) qs.set('offset', String(params.offset))
+    const query = qs.toString() ? `?${qs.toString()}` : ''
+    return api.get<AdminUserListResponse>(`/admin/users${query}`)
+  },
 }
 
 // ── Announcements (Phase 13) ──
@@ -386,6 +414,17 @@ export const analyticsApi = {
     const query = subjectId ? `?subject_id=${encodeURIComponent(subjectId)}` : ''
     return api.get<ClassAnalytics>(`/analytics/class${query}`)
   },
+  studentDetail: (studentId: string) =>
+    api.get<StudentDetailResponse>(`/analytics/students/${studentId}`),
+}
+
+// ── Boss Battles (Phase 10) ──
+
+export const bossBattlesApi = {
+  list: () => api.get<BossBattleListResponse>('/boss-battles/'),
+  get: (id: string) => api.get<BossBattleDetail>(`/boss-battles/${id}`),
+  submit: (id: string, data: { answers: Record<string, string>; elapsed_seconds: number }) =>
+    api.post<BossBattleSubmitResponse>(`/boss-battles/${id}/submit`, data),
 }
 
 // ── Algorithm Showcase (Phase 19, F21/F23/F25/F26) ──

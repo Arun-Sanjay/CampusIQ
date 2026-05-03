@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import io
 import logging
+import time
 import uuid
 from functools import lru_cache
 from pathlib import Path
@@ -62,6 +63,46 @@ def save_audio_bytes(data: bytes, *, extension: str = "mp3") -> tuple[Path, str]
     file_path = AUDIO_DIR / f"{file_id}{extension}"
     file_path.write_bytes(data)
     return file_path, f"{AUDIO_URL_PREFIX}/{file_path.name}"
+
+
+def purge_old_audio(*, retention_days: int) -> dict[str, int]:
+    """Delete audio files in AUDIO_DIR older than `retention_days`.
+
+    Returns a small report so callers (and tests) can confirm the cleanup ran.
+    """
+    if retention_days <= 0:
+        return {"scanned": 0, "deleted": 0, "bytes_freed": 0}
+
+    cutoff = time.time() - retention_days * 86400
+    scanned = 0
+    deleted = 0
+    bytes_freed = 0
+    if not AUDIO_DIR.exists():
+        return {"scanned": 0, "deleted": 0, "bytes_freed": 0}
+    for entry in AUDIO_DIR.iterdir():
+        if not entry.is_file():
+            continue
+        scanned += 1
+        try:
+            mtime = entry.stat().st_mtime
+        except OSError:
+            continue
+        if mtime < cutoff:
+            try:
+                size = entry.stat().st_size
+                entry.unlink()
+                deleted += 1
+                bytes_freed += size
+            except OSError as exc:
+                logger.warning("Could not delete stale audio %s: %s", entry, exc)
+    if deleted:
+        logger.info(
+            "audio cleanup: deleted %d files (%.2f MB freed) older than %d days",
+            deleted,
+            bytes_freed / (1024 * 1024),
+            retention_days,
+        )
+    return {"scanned": scanned, "deleted": deleted, "bytes_freed": bytes_freed}
 
 
 # ════════════════════════════════════════════════════════════════

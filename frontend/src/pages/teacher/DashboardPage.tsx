@@ -1,26 +1,46 @@
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, type Variants } from 'framer-motion'
 import {
-  Users, FileText, Brain, TrendingUp,
-  Upload, PlusCircle, Megaphone, ChevronRight,
+  AlertCircle,
+  Brain,
+  ChevronRight,
+  FileText,
+  Loader2,
+  Megaphone,
+  PlusCircle,
+  TrendingUp,
+  Upload,
+  Users,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Card, { CardHeader, CardTitle, CardLabel } from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import StatCard from '../../components/dashboard/StatCard'
+import { ApiError, dashboardApi } from '../../api/client'
+import type {
+  DocumentProcessingStatus,
+  TeacherDashboardResponse,
+} from '../../types'
 
-const stagger: Variants = {
-  animate: { transition: { staggerChildren: 0.05 } },
-}
-
+const stagger: Variants = { animate: { transition: { staggerChildren: 0.05 } } }
 const fadeUp: Variants = {
   initial: { opacity: 0, y: 16 },
   animate: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } },
+}
+
+const STAT_ICONS: Record<string, LucideIcon> = {
+  'TOTAL STUDENTS': Users,
+  DOCUMENTS: FileText,
+  'QUIZZES PUBLISHED': Brain,
+  'CLASS AVERAGE': TrendingUp,
 }
 
 interface QuickAction {
   title: string
   description: string
   icon: LucideIcon
+  to: string
 }
 
 const quickActions: QuickAction[] = [
@@ -28,87 +48,136 @@ const quickActions: QuickAction[] = [
     title: 'Upload Document',
     description: 'Upload PDFs, DOCX, or PPTX files for AI processing',
     icon: Upload,
+    to: '/teacher/documents',
   },
   {
     title: 'Create Quiz',
     description: 'Generate quizzes automatically from your documents',
     icon: PlusCircle,
+    to: '/teacher/quizzes',
   },
   {
     title: 'Post Announcement',
     description: 'Notify students about deadlines and updates',
     icon: Megaphone,
+    to: '/teacher/announcements',
   },
 ]
 
-type UploadStatus = 'Ready' | 'Processing' | 'Failed'
-
-interface RecentUpload {
-  name: string
-  subject: string
-  date: string
-  status: UploadStatus
+const statusVariant: Record<
+  DocumentProcessingStatus,
+  'success' | 'warning' | 'danger' | 'default'
+> = {
+  ready: 'success',
+  processing: 'warning',
+  pending: 'default',
+  failed: 'danger',
 }
 
-const recentUploads: RecentUpload[] = [
-  { name: 'DAA_Chapter5_Graphs.pdf', subject: 'Design & Analysis of Algorithms', date: 'Apr 5, 2026', status: 'Ready' },
-  { name: 'OS_Deadlock_Notes.pdf', subject: 'Operating Systems', date: 'Apr 4, 2026', status: 'Ready' },
-  { name: 'CN_Transport_Layer.docx', subject: 'Computer Networks', date: 'Apr 4, 2026', status: 'Processing' },
-  { name: 'DBMS_Normalization.pptx', subject: 'Database Management', date: 'Apr 3, 2026', status: 'Ready' },
-]
-
-const statusVariant: Record<UploadStatus, 'success' | 'warning' | 'danger'> = {
-  Ready: 'success',
-  Processing: 'warning',
-  Failed: 'danger',
+const statusLabel: Record<DocumentProcessingStatus, string> = {
+  ready: 'Ready',
+  processing: 'Processing',
+  pending: 'Pending',
+  failed: 'Failed',
 }
 
-interface DashboardStat {
-  label: string
-  value: string
-  icon: LucideIcon
-  trend?: number
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export default function DashboardPage() {
-  const stats: DashboardStat[] = [
-    { label: 'TOTAL STUDENTS', value: '156', icon: Users, trend: 5 },
-    { label: 'DOCUMENTS', value: '42', icon: FileText, trend: 12 },
-    { label: 'QUIZZES PUBLISHED', value: '18', icon: Brain, trend: 3 },
-    { label: 'CLASS AVERAGE', value: '72%', icon: TrendingUp, trend: -2 },
-  ]
+  const navigate = useNavigate()
+  const [data, setData] = useState<TeacherDashboardResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const d = await dashboardApi.teacher()
+        if (!cancelled) setData(d)
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof ApiError && typeof err.detail === 'string'
+              ? err.detail
+              : 'Could not load teacher dashboard',
+          )
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (loading) {
+    return (
+      <Card className="flex items-center gap-2 justify-center py-12 text-[var(--text-tertiary)]">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Loading your dashboard…
+      </Card>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <Card className="space-y-3">
+        <div className="flex items-center gap-2 text-danger">
+          <AlertCircle className="h-4 w-4" />
+          <span className="text-sm">{error ?? 'No dashboard data'}</span>
+        </div>
+      </Card>
+    )
+  }
 
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
-      {/* Stats Row */}
       <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4">
-        {stats.map((stat, i) => (
+        {data.stats.map((stat, i) => (
           <motion.div
             key={stat.label}
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ delay: 0.1 + i * 0.06, duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
-            <StatCard {...stat} />
+            <StatCard
+              label={stat.label}
+              value={stat.value}
+              icon={STAT_ICONS[stat.label] ?? FileText}
+              trend={stat.trend ?? undefined}
+            />
           </motion.div>
         ))}
       </motion.div>
 
-      {/* Quick Actions */}
       <motion.div variants={fadeUp}>
         <CardLabel className="mb-3 block">QUICK ACTIONS</CardLabel>
         <div className="grid grid-cols-3 gap-4">
           {quickActions.map((action) => {
             const Icon = action.icon
             return (
-              <Card key={action.title} hover className="cursor-pointer group">
+              <Card
+                key={action.title}
+                hover
+                className="cursor-pointer group"
+                onClick={() => navigate(action.to)}
+              >
                 <div className="flex items-start gap-3">
                   <div className="p-2 rounded-lg bg-[var(--bg-tertiary)] group-hover:bg-primary/10 transition-colors">
                     <Icon className="h-5 w-5 text-[var(--text-secondary)] group-hover:text-primary transition-colors" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm text-[var(--text-primary)]">{action.title}</p>
-                    <p className="text-xs text-[var(--text-tertiary)] mt-0.5">{action.description}</p>
+                    <p className="font-semibold text-sm text-[var(--text-primary)]">
+                      {action.title}
+                    </p>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                      {action.description}
+                    </p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-[var(--text-tertiary)] opacity-0 group-hover:opacity-100 transition-opacity mt-1" />
                 </div>
@@ -118,44 +187,87 @@ export default function DashboardPage() {
         </div>
       </motion.div>
 
-      {/* Recent Uploads */}
       <motion.div variants={fadeUp}>
         <Card>
-          <CardHeader action={<span className="text-xs text-[var(--text-secondary)] cursor-pointer hover:text-[var(--text-primary)]">View All</span>}>
+          <CardHeader
+            action={
+              <span
+                className="text-xs text-[var(--text-secondary)] cursor-pointer hover:text-[var(--text-primary)]"
+                onClick={() => navigate('/teacher/documents')}
+              >
+                View All
+              </span>
+            }
+          >
             <CardTitle>Recent Uploads</CardTitle>
           </CardHeader>
-          <div className="space-y-3">
-            {recentUploads.map((doc) => (
-              <div
-                key={doc.name}
-                className="flex items-center justify-between py-2 border-b border-[var(--border-default)] last:border-0"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <FileText className="h-4 w-4 text-[var(--text-tertiary)] shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-[var(--text-primary)] truncate">{doc.name}</p>
-                    <p className="text-xs text-[var(--text-tertiary)]">{doc.subject}</p>
+          {data.recent_uploads.length === 0 ? (
+            <p className="text-sm text-[var(--text-tertiary)]">
+              No uploads yet. Use Quick Actions above to upload your first document.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {data.recent_uploads.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between py-2 border-b border-[var(--border-default)] last:border-0"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText className="h-4 w-4 text-[var(--text-tertiary)] shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                        {doc.name}
+                      </p>
+                      <p className="text-xs text-[var(--text-tertiary)]">
+                        {doc.subject_name ?? doc.subject_code ?? '—'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 shrink-0">
+                    <span className="text-xs text-[var(--text-tertiary)]">
+                      {formatDate(doc.created_at)}
+                    </span>
+                    <Badge variant={statusVariant[doc.status]} size="sm" dot>
+                      {statusLabel[doc.status]}
+                    </Badge>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 shrink-0">
-                  <span className="text-xs text-[var(--text-tertiary)]">{doc.date}</span>
-                  <Badge variant={statusVariant[doc.status]} size="sm" dot>{doc.status}</Badge>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </Card>
       </motion.div>
 
-      {/* Class Performance Trend Placeholder */}
       <motion.div variants={fadeUp}>
         <Card>
           <CardHeader>
-            <CardTitle>Class Performance Trend</CardTitle>
+            <CardTitle>Class Performance</CardTitle>
           </CardHeader>
-          <div className="h-48 flex items-center justify-center border border-dashed border-[var(--border-default)] rounded-lg">
-            <p className="text-sm text-[var(--text-tertiary)]">Chart will render here</p>
-          </div>
+          {data.class_average == null ? (
+            <p className="text-sm text-[var(--text-tertiary)]">
+              No quiz attempts yet. Once students start attempting your published quizzes, the
+              class average will appear here.
+            </p>
+          ) : (
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider">
+                  Class average
+                </p>
+                <p className="text-3xl font-bold text-[var(--text-primary)] tabular-nums">
+                  {data.class_average.toFixed(1)}%
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-[var(--text-tertiary)] uppercase tracking-wider text-right">
+                  Active students
+                </p>
+                <p className="text-3xl font-bold text-[var(--text-primary)] tabular-nums">
+                  {data.students_total}
+                </p>
+              </div>
+            </div>
+          )}
         </Card>
       </motion.div>
     </motion.div>

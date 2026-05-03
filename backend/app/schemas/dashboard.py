@@ -69,3 +69,103 @@ class DashboardResponse(BaseModel):
     tasks: list[TaskItemResponse]
     recent_activity: list[ActivityItem]
     announcements: list[AnnouncementResponse] = []
+
+
+# ── Teacher dashboard (Phase 4 wiring) ──
+
+class TeacherStat(BaseModel):
+    label: str
+    value: str
+    trend: float | None = None  # signed % change vs prior period (optional)
+
+
+class RecentUploadRow(BaseModel):
+    id: uuid.UUID
+    name: str
+    subject_code: str | None
+    subject_name: str | None
+    created_at: datetime
+    status: Literal["pending", "processing", "ready", "failed"]
+
+
+class TeacherDashboardResponse(BaseModel):
+    teacher_id: uuid.UUID
+    full_name: str
+    department: str | None
+    stats: list[TeacherStat]
+    recent_uploads: list[RecentUploadRow]
+    class_average: float | None
+    students_total: int
+
+
+# ── Admin dashboard (Phase 4 wiring) ──
+
+class AdminStat(BaseModel):
+    label: str
+    value: str
+    trend: float | None = None
+
+
+class UserBreakdownRow(BaseModel):
+    role: Literal["student", "teacher", "admin"]
+    count: int
+
+
+class PlatformActivityItem(BaseModel):
+    text: str
+    created_at: datetime
+
+
+class PlatformHealth(BaseModel):
+    api_response_ms: int
+    storage_used_gb: float
+    storage_quota_gb: float
+    uptime_pct: float
+
+
+class AdminDashboardResponse(BaseModel):
+    stats: list[AdminStat]
+    user_breakdown: list[UserBreakdownRow]
+    recent_activity: list[PlatformActivityItem]
+    platform_health: PlatformHealth
+
+
+# ── Admin user list ──
+
+class AdminUserRow(BaseModel):
+    id: uuid.UUID
+    email: str
+    full_name: str
+    role: Literal["student", "teacher", "admin"]
+    is_active: bool
+    branch: str | None = None
+    semester: int | None = None
+    department: str | None = None
+    last_login: datetime | None = None
+    created_at: datetime
+
+
+class AdminUserListResponse(BaseModel):
+    total: int
+    items: list[AdminUserRow]
+
+
+# ── Teacher: per-student detail ──
+
+class StudentQuizScore(BaseModel):
+    quiz_id: uuid.UUID
+    label: str
+    value: float
+    completed_at: datetime
+
+
+class StudentDetailResponse(BaseModel):
+    student_id: uuid.UUID
+    name: str
+    branch: str | None
+    semester: int | None
+    quiz_scores: list[StudentQuizScore]
+    weak_areas: list[str]
+    xp_total: int
+    streak_days: int
+    community_contributions: int
