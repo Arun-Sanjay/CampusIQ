@@ -507,62 +507,98 @@ export default function ResumeBuilderPage() {
         style={{ height: 'calc(100vh - 14rem)' }}
       >
         {/* Left: AI Chat */}
-        <div className="w-1/2 flex flex-col card">
-          <div className="p-3 border-b border-[var(--border-default)] flex items-center justify-between">
-            <CardLabel>AI RESUME COACH</CardLabel>
-            <span className="text-xs text-[var(--text-tertiary)]">
-              {messages.length} message{messages.length === 1 ? '' : 's'}
+        <div className="w-1/2 flex flex-col card overflow-hidden">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)]">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-full bg-primary/15 flex items-center justify-center">
+                <Bot className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--text-primary)] leading-tight">
+                  AI Resume Coach
+                </p>
+                <p className="text-xs text-[var(--text-tertiary)]">
+                  {messages.length} message{messages.length === 1 ? '' : 's'}
+                </p>
+              </div>
+            </div>
+            <span className="inline-flex items-center gap-1 text-xs text-success">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+              online
             </span>
           </div>
-          <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={clsx('flex gap-2', msg.role === 'user' && 'justify-end')}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <Bot className="h-3.5 w-3.5 text-primary" />
-                  </div>
-                )}
+
+          {/* Messages */}
+          <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+            {messages.map((msg, i) => {
+              const isUser = msg.role === 'user'
+              return (
                 <div
+                  key={i}
                   className={clsx(
-                    'max-w-[80%] rounded-lg px-3 py-2 text-sm whitespace-pre-line',
-                    msg.role === 'assistant'
-                      ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)]'
-                      : 'bg-primary text-primary-foreground',
-                    msg.isPending && 'animate-pulse',
+                    'flex items-end gap-2',
+                    isUser ? 'flex-row-reverse' : 'flex-row',
                   )}
                 >
-                  {msg.text}
-                </div>
-                {msg.role === 'user' && (
-                  <div className="w-7 h-7 rounded-full bg-[var(--bg-tertiary)] flex items-center justify-center shrink-0">
-                    <UserIcon className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                  {/* Avatar */}
+                  <div
+                    className={clsx(
+                      'h-7 w-7 rounded-full flex items-center justify-center shrink-0 shadow-sm',
+                      isUser
+                        ? 'bg-primary/15 text-primary'
+                        : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-default)]',
+                    )}
+                  >
+                    {isUser ? (
+                      <UserIcon className="h-3.5 w-3.5" />
+                    ) : (
+                      <Bot className="h-3.5 w-3.5" />
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Bubble */}
+                  <div
+                    className={clsx(
+                      'max-w-[78%] px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-line shadow-sm',
+                      isUser
+                        ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-sm'
+                        : 'bg-[var(--bg-elevated)] text-[var(--text-primary)] border border-[var(--border-default)] rounded-2xl rounded-bl-sm',
+                      msg.isPending && 'animate-pulse',
+                    )}
+                  >
+                    {msg.text}
+                  </div>
+                </div>
+              )
+            })}
           </div>
-          <div className="p-3 border-t border-[var(--border-default)] flex gap-2">
-            <input
-              value={input}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-              onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
-                e.key === 'Enter' && void handleSend()
-              }
-              placeholder="Tell the coach about yourself…"
-              className="input-base flex-1"
-              disabled={sending}
-            />
-            <Button
-              size="sm"
-              icon={sending ? undefined : Send}
-              onClick={() => void handleSend()}
-              disabled={sending || !input.trim()}
-            >
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
-            </Button>
+
+          {/* Composer */}
+          <div className="px-3 py-3 border-t border-[var(--border-default)] bg-[var(--bg-secondary)]">
+            <div className="flex items-center gap-2 rounded-xl border border-[var(--border-default)] bg-[var(--input-bg)] px-3 py-1.5 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/15 transition-shadow">
+              <input
+                value={input}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+                onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
+                  e.key === 'Enter' && void handleSend()
+                }
+                placeholder="Tell the coach about yourself…"
+                className="flex-1 bg-transparent border-0 outline-none text-sm text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] py-1.5"
+                disabled={sending}
+              />
+              <Button
+                size="sm"
+                icon={sending ? undefined : Send}
+                onClick={() => void handleSend()}
+                disabled={sending || !input.trim()}
+              >
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Send'}
+              </Button>
+            </div>
+            <p className="text-[10px] text-[var(--text-tertiary)] mt-1.5 px-1">
+              Press Enter to send · the coach updates the resume on the right as you go
+            </p>
           </div>
         </div>
 
