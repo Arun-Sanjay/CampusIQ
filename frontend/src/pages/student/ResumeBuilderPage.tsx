@@ -22,9 +22,11 @@ import {
   Mail,
   MapPin,
   Phone,
+  Plus,
   Send,
   Trash2,
   User as UserIcon,
+  X,
 } from 'lucide-react'
 import Card, { CardLabel } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
@@ -37,6 +39,7 @@ import type {
   ATSScoreResponse,
   ResumeChatHistoryItem,
   ResumeContent,
+  ResumeLanguage,
   ResumeResponse,
 } from '../../types'
 
@@ -335,6 +338,35 @@ export default function ResumeBuilderPage() {
     if (file) await processPhotoFile(file)
   }
 
+  // Document-level paste handler — ⌘V / Ctrl+V anywhere on the page
+  // pastes a copied image into the photo slot. Only kicks in when the user
+  // isn't typing in a text input or contenteditable, and when the clipboard
+  // actually contains an image (not just text).
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (!resume?.content) return
+      const target = e.target as HTMLElement | null
+      if (target) {
+        const tag = target.tagName.toLowerCase()
+        if (tag === 'input' || tag === 'textarea' || target.isContentEditable) return
+      }
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (const item of items) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile()
+          if (file) {
+            e.preventDefault()
+            void processPhotoFile(file)
+          }
+          break
+        }
+      }
+    }
+    window.addEventListener('paste', onPaste)
+    return () => window.removeEventListener('paste', onPaste)
+  }, [resume?.content, processPhotoFile])
+
   const handlePhotoRemove = async () => {
     if (!resume?.content) return
     setPhotoBusy(true)
@@ -365,6 +397,49 @@ export default function ResumeBuilderPage() {
     // `?print=1` query keeps auto-print scoped to this entry point —
     // direct visits to /student/resume/print stay as a preview.
     window.open('/student/resume/print?print=1', '_blank')
+  }
+
+  // ── Languages inline editor ──
+  const [newLangName, setNewLangName] = useState('')
+  const [newLangProf, setNewLangProf] = useState('Fluent')
+  const [langBusy, setLangBusy] = useState(false)
+
+  const persistLanguages = async (next: ResumeLanguage[]) => {
+    if (!resume?.content) return
+    setLangBusy(true)
+    setError(null)
+    try {
+      const updated = await resumeApi.update({
+        content: { ...resume.content, languages: next },
+      })
+      setResume(updated)
+    } catch (err) {
+      setError(
+        err instanceof ApiError && typeof err.detail === 'string'
+          ? err.detail
+          : 'Could not save languages',
+      )
+    } finally {
+      setLangBusy(false)
+    }
+  }
+
+  const handleAddLanguage = async () => {
+    const name = newLangName.trim()
+    if (!name || !resume?.content) return
+    const next: ResumeLanguage[] = [
+      ...resume.content.languages,
+      { name, proficiency: newLangProf.trim() || 'Fluent' },
+    ]
+    setNewLangName('')
+    setNewLangProf('Fluent')
+    await persistLanguages(next)
+  }
+
+  const handleRemoveLanguage = async (index: number) => {
+    if (!resume?.content) return
+    const next = resume.content.languages.filter((_, i) => i !== index)
+    await persistLanguages(next)
   }
 
   const content: ResumeContent | null = resume?.content ?? null
@@ -735,6 +810,76 @@ export default function ResumeBuilderPage() {
                     </div>
                   </Section>
                 )}
+
+                {/* Languages — inline editor with chip + proficiency. */}
+                <Section title="Languages">
+                  {content && content.languages.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {content.languages.map((lang, i) => (
+                        <span
+                          key={lang.name + i}
+                          className="inline-flex items-center gap-1 rounded-md border border-[var(--border-default)] bg-[var(--bg-tertiary)] px-2 py-1 text-xs"
+                        >
+                          <span className="font-medium text-[var(--text-primary)]">
+                            {lang.name}
+                          </span>
+                          {lang.proficiency && (
+                            <span className="text-[var(--text-tertiary)]">
+                              · {lang.proficiency}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveLanguage(i)}
+                            disabled={langBusy}
+                            className="text-[var(--text-tertiary)] hover:text-danger"
+                            aria-label={`Remove ${lang.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-[var(--text-tertiary)] mb-2">
+                      Add languages you speak to round out the sidebar.
+                    </p>
+                  )}
+                  <div className="flex gap-2 mt-2">
+                    <Input
+                      placeholder="Language (e.g. Hindi)"
+                      value={newLangName}
+                      onChange={(e) => setNewLangName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          void handleAddLanguage()
+                        }
+                      }}
+                      disabled={langBusy}
+                      className="flex-1"
+                    />
+                    <select
+                      value={newLangProf}
+                      onChange={(e) => setNewLangProf(e.target.value)}
+                      disabled={langBusy}
+                      className="input-base w-32 text-sm"
+                    >
+                      <option value="Native">Native</option>
+                      <option value="Fluent">Fluent</option>
+                      <option value="Professional">Professional</option>
+                      <option value="Conversational">Conversational</option>
+                    </select>
+                    <Button
+                      size="sm"
+                      icon={Plus}
+                      onClick={() => void handleAddLanguage()}
+                      disabled={langBusy || !newLangName.trim()}
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </Section>
 
                 {content && content.certifications.length > 0 && (
                   <Section title="Certifications">

@@ -43,6 +43,11 @@ export interface ResumeProject {
   highlights: string[]
 }
 
+export interface ResumeLanguage {
+  name: string
+  proficiency: string
+}
+
 export interface ResumeContent {
   personal: ResumePersonal
   summary: string
@@ -52,6 +57,7 @@ export interface ResumeContent {
   skills: string[]
   certifications: string[]
   achievements: string[]
+  languages: ResumeLanguage[]
 }
 
 export interface ResumeResponse {

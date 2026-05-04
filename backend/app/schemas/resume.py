@@ -97,6 +97,16 @@ class ResumeProject(BaseModel):
         return _to_str(v)
 
 
+class ResumeLanguage(BaseModel):
+    name: str = ""
+    proficiency: str = ""  # e.g. "Native", "Fluent", "Professional", "Conversational"
+
+    @field_validator("name", "proficiency", mode="before")
+    @classmethod
+    def _coerce_language(cls, v):
+        return _to_str(v)
+
+
 class ResumeContent(BaseModel):
     personal: ResumePersonal = ResumePersonal()
     summary: str = ""
@@ -106,6 +116,7 @@ class ResumeContent(BaseModel):
     skills: list[str] = []
     certifications: list[str] = []
     achievements: list[str] = []
+    languages: list[ResumeLanguage] = []
 
 
 # ── API request / response shapes ──

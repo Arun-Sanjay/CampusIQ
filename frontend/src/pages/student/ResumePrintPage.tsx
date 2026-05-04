@@ -142,8 +142,17 @@ export default function ResumePrintPage() {
     return <FullPageMessage text={error ?? 'No resume data'} />
   }
 
-  const { personal, summary, education, experience, projects, skills, certifications, achievements } =
-    content
+  const {
+    personal,
+    summary,
+    education,
+    experience,
+    projects,
+    skills,
+    certifications,
+    achievements,
+    languages,
+  } = content
   const photoUrl = nonEmpty(personal.photo_url)
 
   return (
@@ -209,6 +218,21 @@ export default function ResumePrintPage() {
                   </li>
                 ))}
               </ul>
+            </Section>
+          )}
+
+          {languages.length > 0 && (
+            <Section title="LANGUAGES" sidebar>
+              <div style={styles.languageList}>
+                {languages.map((lang, i) => (
+                  <div key={lang.name + i} style={styles.languageRow}>
+                    <span style={styles.languageName}>{lang.name || '—'}</span>
+                    {nonEmpty(lang.proficiency) && (
+                      <span style={styles.languageProficiency}>{lang.proficiency}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </Section>
           )}
         </aside>
@@ -514,6 +538,26 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sidebarBullet: {
     marginBottom: 2,
+  },
+  languageList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  languageRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: 6,
+    fontSize: 9,
+  },
+  languageName: {
+    color: SIDEBAR_TEXT,
+    fontWeight: 600,
+  },
+  languageProficiency: {
+    color: SIDEBAR_MUTED,
+    fontSize: 8.5,
   },
   main: {
     padding: '14mm 12mm',

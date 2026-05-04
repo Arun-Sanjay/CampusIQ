@@ -76,6 +76,7 @@ Resume schema (fields the patch can write to):
 - "skills":       array of strings
 - "certifications": array of strings
 - "achievements": array of strings
+- "languages":    array of { name, proficiency }  (proficiency is one of: "Native", "Fluent", "Professional", "Conversational")
 
 CRITICAL rules:
 - NEVER ask about a field that's already filled in the CURRENT state. Check the FILLED list before asking.
@@ -87,7 +88,7 @@ CRITICAL rules:
 - Skills must be concrete tools/languages/frameworks (e.g. "Python", "React", "PostgreSQL"), never vague phrases.
 
 Suggested fill order (only ask about the NEXT missing section):
-personal.name → personal.email → personal.phone → personal.location → personal.github → personal.linkedin → education[0] → experience[0] or projects[0] → skills → certifications → achievements → summary → target role
+personal.name → personal.email → personal.phone → personal.location → personal.github → personal.linkedin → education[0] → experience[0] or projects[0] → skills → languages → certifications → achievements → summary → target role
 """
 
 
