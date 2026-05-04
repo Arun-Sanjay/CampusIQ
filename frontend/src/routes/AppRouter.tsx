@@ -34,6 +34,7 @@ import SkillTreePage from '../pages/student/SkillTreePage'
 import LeaderboardPage from '../pages/student/LeaderboardPage'
 import ProfilePage from '../pages/student/ProfilePage'
 import BossBattlesPage from '../pages/student/BossBattlesPage'
+import ResumePrintPage from '../pages/student/ResumePrintPage'
 
 // Teacher pages
 import TeacherDashboard from '../pages/teacher/DashboardPage'
@@ -67,6 +68,8 @@ const router = createBrowserRouter(
 
       {/* Student routes (login required, role: student) */}
       <Route element={<ProtectedRoute allowedRoles={['student']} />}>
+        {/* Resume print view — outside AppLayout so the entire page is the resume. */}
+        <Route path="student/resume/print" element={<ResumePrintPage />} />
         <Route path="student" element={<AppLayout />}>
           <Route index element={<StudentDashboard />} />
           <Route path="notes" element={<NoteAssistantPage />} />

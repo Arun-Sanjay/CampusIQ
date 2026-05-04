@@ -218,7 +218,13 @@ export default function ResumeBuilderPage() {
   }
 
   const handlePrint = () => {
-    window.print()
+    // Open the dedicated print-only route in a new tab. That page renders
+    // the resume in the Professional Resume Template layout (no sidebar /
+    // chat) and auto-fires window.print() once the data is loaded, so the
+    // user lands directly in the browser's "Save as PDF" dialog. The
+    // `?print=1` query keeps auto-print scoped to this entry point —
+    // direct visits to /student/resume/print stay as a preview.
+    window.open('/student/resume/print?print=1', '_blank')
   }
 
   const content: ResumeContent | null = resume?.content ?? null
