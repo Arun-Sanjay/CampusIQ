@@ -1,9 +1,11 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   type ChangeEvent,
+  type DragEvent,
   type KeyboardEvent,
 } from 'react'
 import { motion, type Variants } from 'framer-motion'
@@ -255,42 +257,82 @@ export default function ResumeBuilderPage() {
   // ── Optional profile photo ──
   const photoInputRef = useRef<HTMLInputElement | null>(null)
   const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoDragOver, setPhotoDragOver] = useState(false)
+  // Drag-leave fires for every child element a drag passes over, so a single
+  // boolean flickers. Track the entry counter and only clear when it returns
+  // to zero, matching how Slack / GitHub / Notion implement drop targets.
+  const photoDragDepthRef = useRef(0)
+
+  const processPhotoFile = useCallback(
+    async (file: File): Promise<void> => {
+      if (!resume?.content) return
+      if (!file.type.startsWith('image/')) {
+        setError('Please drop an image file (PNG, JPG, etc.)')
+        return
+      }
+      if (file.size > PHOTO_MAX_INPUT_BYTES) {
+        setError('Photo must be under 10 MB')
+        return
+      }
+      setPhotoBusy(true)
+      setError(null)
+      try {
+        const dataUrl = await resizeImageToDataUrl(file, PHOTO_MAX_EDGE, PHOTO_QUALITY)
+        const next: ResumeContent = {
+          ...resume.content,
+          personal: { ...resume.content.personal, photo_url: dataUrl },
+        }
+        const updated = await resumeApi.update({ content: next })
+        setResume(updated)
+      } catch (err) {
+        setError(
+          err instanceof ApiError && typeof err.detail === 'string'
+            ? err.detail
+            : err instanceof Error
+              ? err.message
+              : 'Could not upload photo',
+        )
+      } finally {
+        setPhotoBusy(false)
+      }
+    },
+    [resume?.content],
+  )
 
   const handlePhotoChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     // Always reset the input so the same file can be picked again later.
     if (e.target) e.target.value = ''
-    if (!file) return
-    if (!resume?.content) return
-    if (!file.type.startsWith('image/')) {
-      setError('Please select an image file (PNG, JPG, etc.)')
-      return
-    }
-    if (file.size > PHOTO_MAX_INPUT_BYTES) {
-      setError('Photo must be under 10 MB')
-      return
-    }
-    setPhotoBusy(true)
-    setError(null)
-    try {
-      const dataUrl = await resizeImageToDataUrl(file, PHOTO_MAX_EDGE, PHOTO_QUALITY)
-      const next: ResumeContent = {
-        ...resume.content,
-        personal: { ...resume.content.personal, photo_url: dataUrl },
-      }
-      const updated = await resumeApi.update({ content: next })
-      setResume(updated)
-    } catch (err) {
-      setError(
-        err instanceof ApiError && typeof err.detail === 'string'
-          ? err.detail
-          : err instanceof Error
-            ? err.message
-            : 'Could not upload photo',
-      )
-    } finally {
-      setPhotoBusy(false)
-    }
+    if (file) await processPhotoFile(file)
+  }
+
+  const handlePhotoDragEnter = (e: DragEvent<HTMLDivElement>) => {
+    if (!Array.from(e.dataTransfer?.types ?? []).includes('Files')) return
+    e.preventDefault()
+    photoDragDepthRef.current += 1
+    setPhotoDragOver(true)
+  }
+
+  const handlePhotoDragOver = (e: DragEvent<HTMLDivElement>) => {
+    if (!Array.from(e.dataTransfer?.types ?? []).includes('Files')) return
+    // Both preventDefault on dragenter AND dragover are required to mark this
+    // as a valid drop target — otherwise the browser shows a "no-entry" cursor.
+    e.preventDefault()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handlePhotoDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    if (!Array.from(e.dataTransfer?.types ?? []).includes('Files')) return
+    photoDragDepthRef.current = Math.max(0, photoDragDepthRef.current - 1)
+    if (photoDragDepthRef.current === 0) setPhotoDragOver(false)
+  }
+
+  const handlePhotoDrop = async (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    photoDragDepthRef.current = 0
+    setPhotoDragOver(false)
+    const file = e.dataTransfer?.files?.[0]
+    if (file) await processPhotoFile(file)
   }
 
   const handlePhotoRemove = async () => {
@@ -461,11 +503,42 @@ export default function ResumeBuilderPage() {
               <div className="space-y-5 print-resume">
                 {/* Optional profile photo — sits above the name in the preview
                     so the user can see immediately what the printed resume
-                    will show. */}
-                <div className="flex items-center gap-3 pb-3 border-b border-[var(--border-default)]">
+                    will show. The whole row is a drop target so the user can
+                    drag a photo onto it; it also doubles as a click target
+                    that opens the native file picker. */}
+                <div
+                  className={clsx(
+                    'flex items-center gap-3 pb-3 border-b transition-colors rounded-md p-2 -m-2',
+                    photoDragOver
+                      ? 'border-primary bg-primary/5 ring-2 ring-primary/40 ring-offset-1 ring-offset-[var(--bg-secondary)]'
+                      : 'border-[var(--border-default)]',
+                  )}
+                  onDragEnter={handlePhotoDragEnter}
+                  onDragOver={handlePhotoDragOver}
+                  onDragLeave={handlePhotoDragLeave}
+                  onDrop={(e) => void handlePhotoDrop(e)}
+                  onClick={() => {
+                    if (!photoBusy) photoInputRef.current?.click()
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !photoBusy) {
+                      e.preventDefault()
+                      photoInputRef.current?.click()
+                    }
+                  }}
+                  aria-label="Upload profile photo (or drag and drop)"
+                  style={{ cursor: photoBusy ? 'progress' : 'pointer' }}
+                >
                   <div
-                    className="h-14 w-14 rounded-full border border-dashed border-[var(--border-strong)] bg-[var(--bg-tertiary)] flex items-center justify-center overflow-hidden shrink-0"
-                    aria-label="Profile photo preview"
+                    className={clsx(
+                      'h-14 w-14 rounded-full border bg-[var(--bg-tertiary)] flex items-center justify-center overflow-hidden shrink-0 transition-colors',
+                      photoDragOver
+                        ? 'border-primary border-2'
+                        : 'border-dashed border-[var(--border-strong)]',
+                    )}
+                    aria-hidden="true"
                   >
                     {personal?.photo_url ? (
                       <img
@@ -480,9 +553,11 @@ export default function ResumeBuilderPage() {
                   <div className="flex-1 min-w-0">
                     <CardLabel>PHOTO (OPTIONAL)</CardLabel>
                     <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
-                      {personal?.photo_url
-                        ? 'Shows in the top-left of the printed resume.'
-                        : 'Skip this and the photo circle stays blank.'}
+                      {photoDragOver
+                        ? 'Drop the image to upload it.'
+                        : personal?.photo_url
+                          ? 'Click or drop a new image to replace.'
+                          : 'Drag an image here, or click to choose. Skip and the circle stays blank.'}
                     </p>
                   </div>
                   <input
@@ -495,7 +570,10 @@ export default function ResumeBuilderPage() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() => photoInputRef.current?.click()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      photoInputRef.current?.click()
+                    }}
                     disabled={photoBusy}
                   >
                     {photoBusy ? (
@@ -511,7 +589,10 @@ export default function ResumeBuilderPage() {
                       size="sm"
                       variant="ghost"
                       icon={Trash2}
-                      onClick={() => void handlePhotoRemove()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void handlePhotoRemove()
+                      }}
                       disabled={photoBusy}
                       aria-label="Remove photo"
                     />
