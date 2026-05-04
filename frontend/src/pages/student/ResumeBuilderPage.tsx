@@ -15,11 +15,13 @@ import {
   Code,
   Download,
   ExternalLink,
+  ImagePlus,
   Loader2,
   Mail,
   MapPin,
   Phone,
   Send,
+  Trash2,
   User as UserIcon,
 } from 'lucide-react'
 import Card, { CardLabel } from '../../components/ui/Card'
@@ -66,6 +68,39 @@ function atsBadgeVariant(score: number): 'success' | 'warning' | 'danger' {
   if (score >= 75) return 'success'
   if (score >= 55) return 'warning'
   return 'danger'
+}
+
+const PHOTO_MAX_EDGE = 400
+const PHOTO_QUALITY = 0.85
+const PHOTO_MAX_INPUT_BYTES = 10 * 1024 * 1024 // refuse >10MB at the input layer
+
+async function resizeImageToDataUrl(
+  file: File,
+  maxEdge: number,
+  quality: number,
+): Promise<string> {
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = () => reject(new Error('Could not decode image'))
+      el.src = objectUrl
+    })
+    const longestEdge = Math.max(img.width, img.height)
+    const scale = Math.min(1, maxEdge / longestEdge)
+    const w = Math.max(1, Math.round(img.width * scale))
+    const h = Math.max(1, Math.round(img.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('Canvas 2D context unavailable')
+    ctx.drawImage(img, 0, 0, w, h)
+    return canvas.toDataURL('image/jpeg', quality)
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
 }
 
 export default function ResumeBuilderPage() {
@@ -217,6 +252,69 @@ export default function ResumeBuilderPage() {
     }
   }
 
+  // ── Optional profile photo ──
+  const photoInputRef = useRef<HTMLInputElement | null>(null)
+  const [photoBusy, setPhotoBusy] = useState(false)
+
+  const handlePhotoChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    // Always reset the input so the same file can be picked again later.
+    if (e.target) e.target.value = ''
+    if (!file) return
+    if (!resume?.content) return
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file (PNG, JPG, etc.)')
+      return
+    }
+    if (file.size > PHOTO_MAX_INPUT_BYTES) {
+      setError('Photo must be under 10 MB')
+      return
+    }
+    setPhotoBusy(true)
+    setError(null)
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, PHOTO_MAX_EDGE, PHOTO_QUALITY)
+      const next: ResumeContent = {
+        ...resume.content,
+        personal: { ...resume.content.personal, photo_url: dataUrl },
+      }
+      const updated = await resumeApi.update({ content: next })
+      setResume(updated)
+    } catch (err) {
+      setError(
+        err instanceof ApiError && typeof err.detail === 'string'
+          ? err.detail
+          : err instanceof Error
+            ? err.message
+            : 'Could not upload photo',
+      )
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  const handlePhotoRemove = async () => {
+    if (!resume?.content) return
+    setPhotoBusy(true)
+    setError(null)
+    try {
+      const next: ResumeContent = {
+        ...resume.content,
+        personal: { ...resume.content.personal, photo_url: '' },
+      }
+      const updated = await resumeApi.update({ content: next })
+      setResume(updated)
+    } catch (err) {
+      setError(
+        err instanceof ApiError && typeof err.detail === 'string'
+          ? err.detail
+          : 'Could not remove photo',
+      )
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
   const handlePrint = () => {
     // Open the dedicated print-only route in a new tab. That page renders
     // the resume in the Professional Resume Template layout (no sidebar /
@@ -361,6 +459,65 @@ export default function ResumeBuilderPage() {
               </p>
             ) : (
               <div className="space-y-5 print-resume">
+                {/* Optional profile photo — sits above the name in the preview
+                    so the user can see immediately what the printed resume
+                    will show. */}
+                <div className="flex items-center gap-3 pb-3 border-b border-[var(--border-default)]">
+                  <div
+                    className="h-14 w-14 rounded-full border border-dashed border-[var(--border-strong)] bg-[var(--bg-tertiary)] flex items-center justify-center overflow-hidden shrink-0"
+                    aria-label="Profile photo preview"
+                  >
+                    {personal?.photo_url ? (
+                      <img
+                        src={personal.photo_url}
+                        alt="Profile"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <ImagePlus className="h-5 w-5 text-[var(--text-tertiary)]" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <CardLabel>PHOTO (OPTIONAL)</CardLabel>
+                    <p className="text-xs text-[var(--text-tertiary)] mt-0.5">
+                      {personal?.photo_url
+                        ? 'Shows in the top-left of the printed resume.'
+                        : 'Skip this and the photo circle stays blank.'}
+                    </p>
+                  </div>
+                  <input
+                    ref={photoInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => void handlePhotoChange(e)}
+                    style={{ display: 'none' }}
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={photoBusy}
+                  >
+                    {photoBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : personal?.photo_url ? (
+                      'Change'
+                    ) : (
+                      'Upload'
+                    )}
+                  </Button>
+                  {personal?.photo_url && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={Trash2}
+                      onClick={() => void handlePhotoRemove()}
+                      disabled={photoBusy}
+                      aria-label="Remove photo"
+                    />
+                  )}
+                </div>
+
                 <div className="border-b border-[var(--border-default)] pb-4">
                   <h2 className="text-2xl font-bold text-[var(--text-primary)]">
                     {personal?.name || 'Your Name'}

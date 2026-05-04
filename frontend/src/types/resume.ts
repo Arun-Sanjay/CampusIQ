@@ -13,6 +13,7 @@ export interface ResumePersonal {
   linkedin: string
   github: string
   portfolio: string
+  photo_url: string
 }
 
 export interface ResumeEducation {

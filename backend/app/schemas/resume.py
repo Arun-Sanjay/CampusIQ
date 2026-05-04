@@ -39,8 +39,13 @@ class ResumePersonal(BaseModel):
     linkedin: str = ""
     github: str = ""
     portfolio: str = ""
+    # Optional. Stored as a `data:image/...;base64,...` URL so the photo
+    # travels with the rest of the resume content (no separate uploads
+    # endpoint, no extra cleanup). The frontend resizes images down to
+    # ~400px on its longest edge before storing, keeping payload sane.
+    photo_url: str = ""
 
-    @field_validator("name", "email", "phone", "location", "linkedin", "github", "portfolio", mode="before")
+    @field_validator("name", "email", "phone", "location", "linkedin", "github", "portfolio", "photo_url", mode="before")
     @classmethod
     def _coerce_personal(cls, v):
         return _to_str(v)

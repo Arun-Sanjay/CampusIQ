@@ -81,12 +81,6 @@ function buildContact(personal: ResumeContent['personal']): ContactRow[] {
   return rows
 }
 
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return ''
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
 
 export default function ResumePrintPage() {
   const [content, setContent] = useState<ResumeContent | null>(null)
@@ -150,7 +144,7 @@ export default function ResumePrintPage() {
 
   const { personal, summary, education, experience, projects, skills, certifications, achievements } =
     content
-  const initials = getInitials(personal.name)
+  const photoUrl = nonEmpty(personal.photo_url)
 
   return (
     <div style={styles.outer}>
@@ -160,13 +154,13 @@ export default function ResumePrintPage() {
         {/* ── Sidebar ── */}
         <aside style={styles.sidebar}>
           <div style={styles.photoWrapper}>
-            <div style={styles.photoCircle}>
-              {initials ? (
-                <span style={styles.photoInitials}>{initials}</span>
-              ) : (
-                <UserIcon size={36} color={SIDEBAR_MUTED} />
-              )}
-            </div>
+            {photoUrl ? (
+              <img src={photoUrl} alt="" style={styles.photoImage} />
+            ) : (
+              // Optional: when no photo is uploaded, render a blank circle so
+              // the layout still has a structural anchor in the top-left.
+              <div style={styles.photoBlank} aria-hidden="true" />
+            )}
           </div>
 
           {nonEmpty(summary) && (
@@ -431,21 +425,20 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     marginBottom: '6mm',
   },
-  photoCircle: {
+  photoImage: {
+    width: 48 * 1.6,
+    height: 48 * 1.6,
+    borderRadius: '50%',
+    objectFit: 'cover',
+    border: `2px solid ${SIDEBAR_MUTED}`,
+    display: 'block',
+  },
+  photoBlank: {
     width: 48 * 1.6,
     height: 48 * 1.6,
     borderRadius: '50%',
     background: '#3F3F3F',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
     border: `2px solid ${SIDEBAR_MUTED}`,
-  },
-  photoInitials: {
-    fontSize: 22,
-    fontWeight: 700,
-    color: SIDEBAR_TEXT,
-    letterSpacing: 1,
   },
   sidebarSection: {
     marginBottom: '6mm',
