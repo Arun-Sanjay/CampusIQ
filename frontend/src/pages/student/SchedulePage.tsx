@@ -186,11 +186,12 @@ export default function SchedulePage() {
     [result],
   )
 
-  // Auto-tighten the hour window to actual content with a 1-hour pad on each
-  // side. Falls back to 8 AM → 10 PM when there's no result yet.
+  // Auto-tighten the hour window so the grid only spans what's actually
+  // populated (incl. the lunch / dinner locks). No empty hours at the top
+  // or bottom.
   const { hourStart, hourEnd } = useMemo(() => {
     if (!result || result.slots.length === 0) {
-      return { hourStart: 8, hourEnd: 22 }
+      return { hourStart: 9, hourEnd: 21 }
     }
     let minH = Infinity
     let maxH = -Infinity
@@ -200,11 +201,11 @@ export default function SchedulePage() {
       if (s.hour_index + 1 > maxH) maxH = s.hour_index + 1
     }
     if (!isFinite(minH) || !isFinite(maxH)) {
-      return { hourStart: 8, hourEnd: 22 }
+      return { hourStart: 9, hourEnd: 21 }
     }
     return {
-      hourStart: Math.max(0, Math.min(minH - 1, 8)),
-      hourEnd: Math.min(24, Math.max(maxH + 1, 18)),
+      hourStart: Math.max(0, minH),
+      hourEnd: Math.min(24, maxH),
     }
   }, [result])
 
@@ -509,34 +510,61 @@ function WeeklyGrid({
           gridTemplateRows: `${HEADER_HEIGHT}px repeat(${hourCount}, ${ROW_HEIGHT}px)`,
         }}
       >
-        {/* Corner */}
-        <div className="bg-[var(--bg-elevated)]" />
+        {/* Every cell uses explicit gridColumn + gridRow so the row-spanning
+            blocks below don't shove the backdrop cells around via auto-flow. */}
 
-        {/* Day headers */}
+        {/* Corner */}
+        <div
+          className="bg-[var(--bg-tertiary)]/50 border-b border-[var(--border-default)]"
+          style={{ gridColumn: 1, gridRow: 1 }}
+        />
+
+        {/* Day headers — slightly bolder, with a subtle bottom accent so the
+            header reads separated from the cells below. */}
         {Array.from({ length: days }).map((_, d) => (
           <div
             key={`day-${d}`}
-            className="bg-[var(--bg-elevated)] border-l border-[var(--border-default)] flex items-center justify-center text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-secondary)]"
+            className="bg-[var(--bg-tertiary)]/50 border-l border-b border-[var(--border-default)] flex items-center justify-center text-[12px] font-semibold uppercase tracking-[0.14em] text-[var(--text-primary)]"
+            style={{ gridColumn: d + 2, gridRow: 1 }}
           >
             {DAY_LABELS[d % 7]}
           </div>
         ))}
 
-        {/* Hour-row backdrop: just a horizontal divider under each row so the
-            grid reads as a calendar, not a spreadsheet. */}
+        {/* Hour labels (column 1) */}
         {Array.from({ length: hourCount }).map((_, i) => {
           const hour = hourStart + i
           return (
-            <BackdropRow
-              key={`row-${i}`}
-              hour={hour}
-              days={days}
-              isFirst={i === 0}
-            />
+            <div
+              key={`label-${i}`}
+              className={clsx(
+                'flex items-start justify-end pr-2 pt-1 text-[10px] tabular-nums text-[var(--text-tertiary)] bg-[var(--bg-elevated)]',
+                i !== 0 && 'border-t border-[var(--border-default)]/50',
+              )}
+              style={{ gridColumn: 1, gridRow: i + 2 }}
+            >
+              {formatHour(hour)}
+            </div>
           )
         })}
 
-        {/* Blocks — placed via grid-row / grid-column on top of the backdrop. */}
+        {/* Day cell backdrops — one per (day, hour). These sit BEHIND blocks
+            in z-order because they appear earlier in the DOM. */}
+        {Array.from({ length: hourCount }).map((_, i) =>
+          Array.from({ length: days }).map((_, d) => (
+            <div
+              key={`bg-${i}-${d}`}
+              className={clsx(
+                'bg-[var(--bg-elevated)] border-l border-[var(--border-default)]/40',
+                i !== 0 && 'border-t border-[var(--border-default)]/50',
+              )}
+              style={{ gridColumn: d + 2, gridRow: i + 2 }}
+            />
+          )),
+        )}
+
+        {/* Blocks layered on top — they share grid cells with backdrops but
+            render last in the DOM so they paint over them. */}
         {blocks.map((b, i) => {
           const top = b.startHour - hourStart
           const span = b.endHour - b.startHour
@@ -546,11 +574,12 @@ function WeeklyGrid({
             <div
               key={`b-${i}`}
               className={clsx(
-                'relative m-1 rounded-md px-2.5 py-1.5 flex items-center overflow-hidden',
-                b.isLocked && 'opacity-60',
+                'relative m-1 rounded-md px-3 py-2 flex flex-col justify-between overflow-hidden z-10 transition-shadow',
+                !b.isLocked && 'hover:shadow-md',
+                b.isLocked && 'opacity-70',
               )}
               style={{
-                gridColumn: `${b.dayIndex + 2}`,
+                gridColumn: b.dayIndex + 2,
                 gridRow: `${top + 2} / span ${span}`,
                 background: tone.tint,
                 borderLeft: `3px solid ${tone.ring}`,
@@ -558,8 +587,8 @@ function WeeklyGrid({
             >
               <span
                 className={clsx(
-                  'text-[13px] font-semibold leading-tight truncate',
-                  b.isLocked && 'italic font-medium',
+                  'text-[13px] font-semibold leading-tight',
+                  b.isLocked ? 'italic font-medium' : 'line-clamp-2',
                 )}
                 style={{
                   color: b.isLocked ? 'var(--text-tertiary)' : 'var(--text-primary)',
@@ -571,42 +600,18 @@ function WeeklyGrid({
                 )}
                 {b.topic}
               </span>
+              {!b.isLocked && b.subjectCode && (
+                <span
+                  className="text-[10px] font-mono uppercase tracking-wider self-end"
+                  style={{ color: tone.ring, opacity: 0.85 }}
+                >
+                  {b.subjectCode}
+                </span>
+              )}
             </div>
           )
         })}
       </div>
     </div>
-  )
-}
-
-function BackdropRow({
-  hour,
-  days,
-  isFirst,
-}: {
-  hour: number
-  days: number
-  isFirst: boolean
-}) {
-  return (
-    <>
-      <div
-        className={clsx(
-          'flex items-start justify-end pr-2 pt-1 text-[10px] tabular-nums text-[var(--text-tertiary)] bg-[var(--bg-elevated)]',
-          !isFirst && 'border-t border-[var(--border-default)]/60',
-        )}
-      >
-        {formatHour(hour)}
-      </div>
-      {Array.from({ length: days }).map((_, d) => (
-        <div
-          key={`bg-${hour}-${d}`}
-          className={clsx(
-            'bg-[var(--bg-elevated)] border-l border-[var(--border-default)]/40',
-            !isFirst && 'border-t border-[var(--border-default)]/60',
-          )}
-        />
-      ))}
-    </>
   )
 }
