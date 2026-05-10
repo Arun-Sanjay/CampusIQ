@@ -40,15 +40,41 @@ def _ensure_upload_dir() -> None:
     UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 
-def _validate_teacher_owns_subject(db: Session, subject_id: uuid.UUID, user: User) -> Subject:
+def _resolve_subject_for_upload(db: Session, subject_id: uuid.UUID, user: User) -> Subject:
+    """Validate that `user` is allowed to upload a document under `subject_id`.
+
+    - Teachers can only upload to subjects they own.
+    - Admins can upload to any subject.
+    - Students can upload personal notes to any subject (notebookLM-style);
+      the resulting document is automatically scoped to that student.
+    """
     subject = db.get(Subject, subject_id)
     if subject is None:
         raise HTTPException(status_code=404, detail="Subject not found")
     if user.role == UserRole.TEACHER and subject.teacher_id != user.id:
         raise HTTPException(status_code=403, detail="You don't own this subject")
-    if user.role not in (UserRole.TEACHER, UserRole.ADMIN):
-        raise HTTPException(status_code=403, detail="Only teachers or admins can upload documents")
+    if user.role not in (UserRole.STUDENT, UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="You can't upload to this subject")
     return subject
+
+
+def _can_view_document(document: Document, user: User) -> bool:
+    """Visibility predicate used by list / get / chunks / RAG paths.
+
+    - Admins see everything.
+    - Teachers see public docs of their own subjects (no peeks at private notes).
+    - Students see public docs (any subject they can read) + their own private notes.
+    """
+    if user.role == UserRole.ADMIN:
+        return True
+    if user.role == UserRole.TEACHER:
+        if document.owner_student_id is not None:
+            return False  # private student note — never visible to teachers
+        return document.subject.teacher_id == user.id if document.subject else False
+    # STUDENT
+    if document.owner_student_id is None:
+        return True  # public doc — students can read any subject's public docs
+    return document.owner_student_id == user.id
 
 
 def _compression_stats_for(db: Session, document_id: uuid.UUID) -> CompressionStats:
@@ -81,6 +107,7 @@ def _to_response(document: Document, *, db: Session | None = None) -> DocumentRe
         id=document.id,
         subject_id=document.subject_id,
         uploaded_by_id=document.uploaded_by_id,
+        owner_student_id=document.owner_student_id,
         title=document.title,
         file_name=document.file_name,
         content_type=document.content_type,
@@ -101,6 +128,7 @@ def _to_response_with_subject(
         id=document.id,
         subject_id=document.subject_id,
         uploaded_by_id=document.uploaded_by_id,
+        owner_student_id=document.owner_student_id,
         title=document.title,
         file_name=document.file_name,
         content_type=document.content_type,
@@ -120,13 +148,24 @@ def list_documents(
     *,
     subject_id: uuid.UUID | None = None,
 ) -> list[DocumentWithSubject]:
-    """List documents. Teachers see their own; admins see all."""
+    """List documents respecting the visibility rules in `_can_view_document`."""
+    from sqlalchemy import or_
+
     stmt = select(Document, Subject).join(Subject, Document.subject_id == Subject.id)
 
     if user.role == UserRole.TEACHER:
+        # Teacher's own subjects' public docs only — never peek at private notes.
         stmt = stmt.where(Subject.teacher_id == user.id)
-    # admins: no scope filter
-    # students: for now, also see documents in subjects they can access (phase 6 = all published)
+        stmt = stmt.where(Document.owner_student_id.is_(None))
+    elif user.role == UserRole.STUDENT:
+        # Public docs (any subject) + this student's own private notes.
+        stmt = stmt.where(
+            or_(
+                Document.owner_student_id.is_(None),
+                Document.owner_student_id == user.id,
+            )
+        )
+    # admins: no scope filter — they see everything
 
     if subject_id is not None:
         stmt = stmt.where(Document.subject_id == subject_id)
@@ -168,10 +207,13 @@ def get_document(db: Session, document_id: uuid.UUID, user: User) -> Document:
     if document is None:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    if user.role == UserRole.TEACHER:
-        subject = db.get(Subject, document.subject_id)
-        if subject is None or subject.teacher_id != user.id:
-            raise HTTPException(status_code=403, detail="You don't own this document")
+    # Hydrate the subject relationship so _can_view_document can read it.
+    _ = document.subject
+
+    if not _can_view_document(document, user):
+        # Hide existence — return 404 rather than 403 to avoid leaking
+        # private-doc IDs to other students.
+        raise HTTPException(status_code=404, detail="Document not found")
 
     return document
 
@@ -184,9 +226,13 @@ def upload_document(
     *,
     title: str | None = None,
 ) -> DocumentResponse:
-    """Validate + save a file to disk, then create a Document row."""
+    """Validate + save a file to disk, then create a Document row.
+
+    Teacher/admin uploads create public documents (owner_student_id=NULL).
+    Student uploads create personal notes scoped to that student only.
+    """
     _ensure_upload_dir()
-    subject = _validate_teacher_owns_subject(db, subject_id, user)
+    subject = _resolve_subject_for_upload(db, subject_id, user)
 
     # Validate filename and extension
     original_name = file.filename or "untitled"
@@ -238,9 +284,12 @@ def upload_document(
             pass
 
     # Create the DB row. processing_status stays 'pending' until Phase 7 kicks off processing.
+    # Student uploads are scoped to the uploader; teacher/admin uploads stay public.
+    owner_student_id = user.id if user.role == UserRole.STUDENT else None
     document = Document(
         subject_id=subject.id,
         uploaded_by_id=user.id,
+        owner_student_id=owner_student_id,
         title=(title or safe_name).strip(),
         file_name=safe_name,
         storage_path=str(storage_path.resolve()),
@@ -256,6 +305,16 @@ def upload_document(
 
 def delete_document(db: Session, document_id: uuid.UUID, user: User) -> None:
     document = get_document(db, document_id, user)
+
+    # Students can only delete their own private notes; teachers/admins handle
+    # everything else (the public corpus). `get_document` already enforces the
+    # student-only-sees-own-notes rule for private docs, so the only extra
+    # rule to add here is "students can't delete the teacher's public docs."
+    if user.role == UserRole.STUDENT and document.owner_student_id != user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Students can only delete their own personal notes.",
+        )
 
     # Try to remove the file from disk (best effort)
     try:

@@ -40,8 +40,11 @@ def list_documents(
     "/upload",
     response_model=DocumentResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_role("teacher", "admin"))],
-    summary="Upload a document and trigger background processing",
+    summary=(
+        "Upload a document and trigger background processing. "
+        "Teachers/admins upload public docs; students upload personal notes "
+        "that are scoped to themselves (NotebookLM-style)."
+    ),
 )
 def upload_document(
     db: DbSession,
@@ -131,8 +134,11 @@ def list_document_chunks(
 @router.post(
     "/{document_id}/reprocess",
     response_model=DocumentResponse,
-    dependencies=[Depends(require_role("teacher", "admin"))],
-    summary="Re-run the text extraction + chunking + compression pipeline",
+    summary=(
+        "Re-run the text extraction + chunking + compression pipeline. "
+        "Students can reprocess their own personal notes; teachers/admins "
+        "can reprocess public docs they own."
+    ),
 )
 def reprocess_document(
     document_id: uuid.UUID,
@@ -147,7 +153,6 @@ def reprocess_document(
 
 @router.post(
     "/{document_id}/embed-backfill",
-    dependencies=[Depends(require_role("teacher", "admin"))],
     summary="Generate embeddings for chunks that don't have them yet",
 )
 def embed_backfill(
@@ -185,8 +190,10 @@ def download_document(
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_role("teacher", "admin"))],
-    summary="Delete a document (and its file + chunks)",
+    summary=(
+        "Delete a document (and its file + chunks). Students can delete their "
+        "own private notes; teachers/admins handle the public corpus."
+    ),
 )
 def delete_document(
     document_id: uuid.UUID,

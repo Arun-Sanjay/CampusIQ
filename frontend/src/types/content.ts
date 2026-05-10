@@ -55,6 +55,13 @@ export interface Document {
   id: string
   subject_id: string
   uploaded_by_id: string
+  /**
+   * NotebookLM-style visibility:
+   * - `null` → public document (uploaded by a teacher or admin, visible to
+   *   anyone who can read the subject).
+   * - non-null → personal note scoped to that student only.
+   */
+  owner_student_id: string | null
   title: string
   file_name: string
   content_type: string | null

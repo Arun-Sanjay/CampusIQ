@@ -25,6 +25,8 @@ class DocumentResponse(BaseModel):
     id: uuid.UUID
     subject_id: uuid.UUID
     uploaded_by_id: uuid.UUID
+    # NULL = public (teacher/admin upload). Set = private to that student.
+    owner_student_id: uuid.UUID | None = None
     title: str
     file_name: str
     content_type: str | None = None

@@ -63,11 +63,12 @@ def search_chunks(
 ) -> list[SearchHit]:
     """Find the `top_k` most semantically similar chunks to the query.
 
-    Scope rules:
-    - Teachers see only their own subjects' chunks
-    - Admins see everything
-    - Students (Phase 9+) see chunks from any published subject — for now we
-      apply the same teacher rule because student access isn't wired yet.
+    Visibility rules (same as `document._can_view_document`):
+    - Admins see everything.
+    - Teachers see only the public chunks of their own subjects (never see
+      a student's private notes).
+    - Students see all public chunks PLUS their own private notes' chunks
+      (the NotebookLM-style personal-notes integration).
     """
     if not query.strip():
         return []
@@ -95,8 +96,20 @@ def search_chunks(
     )
 
     # Scope filter
+    from sqlalchemy import or_
+
     if user.role == UserRole.TEACHER:
+        # Teacher: only public chunks within their own subjects.
         stmt = stmt.where(Subject.teacher_id == user.id)
+        stmt = stmt.where(Document.owner_student_id.is_(None))
+    elif user.role == UserRole.STUDENT:
+        # Student: public chunks of any subject + their own private-note chunks.
+        stmt = stmt.where(
+            or_(
+                Document.owner_student_id.is_(None),
+                Document.owner_student_id == user.id,
+            )
+        )
     # admins: no filter
 
     if subject_id is not None:

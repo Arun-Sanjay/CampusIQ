@@ -171,6 +171,14 @@ class Document(Base):
     uploaded_by_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # NotebookLM-style visibility:
+    #   NULL → public document (uploaded by a teacher/admin, visible to anyone
+    #          who can see the subject — current behaviour).
+    #   non-NULL → private personal note, only visible to that student.
+    # When the owner is deleted the row goes too (matching uploaded_by_id).
+    owner_student_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     title: Mapped[str] = mapped_column(String(255))
     file_name: Mapped[str] = mapped_column(String(255))
     storage_path: Mapped[str] = mapped_column(String(500))
@@ -187,7 +195,14 @@ class Document(Base):
     )
 
     subject: Mapped["Subject"] = relationship(back_populates="documents")
-    uploaded_by: Mapped["User"] = relationship(back_populates="uploaded_documents")
+    uploaded_by: Mapped["User"] = relationship(
+        back_populates="uploaded_documents", foreign_keys=[uploaded_by_id]
+    )
     chunks: Mapped[list["DocumentChunk"]] = relationship(
         back_populates="document", cascade="all, delete-orphan"
     )
+
+    @property
+    def is_private(self) -> bool:
+        """True iff this document belongs to a single student's personal notes."""
+        return self.owner_student_id is not None
