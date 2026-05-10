@@ -24,6 +24,12 @@ export interface DocumentChunkPreview {
 export interface Subject {
   id: string
   teacher_id: string
+  /**
+   * NotebookLM-style visibility:
+   * - `null` → public teacher subject (visible to every student).
+   * - non-null → student's personal notebook, only visible to that student.
+   */
+  owner_student_id: string | null
   college_id: string | null
   code: string
   name: string
@@ -37,7 +43,8 @@ export interface Subject {
 }
 
 export interface SubjectCreate {
-  code: string
+  /** Optional for student-created notebooks (auto-generated server-side). */
+  code?: string
   name: string
   description?: string
   semester?: number

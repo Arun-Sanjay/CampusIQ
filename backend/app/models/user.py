@@ -68,10 +68,13 @@ class User(Base):
     teacher_profile: Mapped["TeacherProfile | None"] = relationship(
         back_populates="user", uselist=False, cascade="all, delete-orphan"
     )
+    # `Subject` has two FKs into users.id (teacher_id + owner_student_id),
+    # so we pin which one this collection follows.
     owned_subjects: Mapped[list["Subject"]] = relationship(
         back_populates="teacher",
         cascade="all, delete-orphan",
         passive_deletes=True,
+        foreign_keys="Subject.teacher_id",
     )
     # `Document` has two FKs to users.id now (`uploaded_by_id` and the new
     # `owner_student_id` for NotebookLM-style private notes), so SQLAlchemy
@@ -137,8 +140,15 @@ class Subject(Base):
     __tablename__ = "subjects"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # teacher_id is the canonical owner. For a teacher-created (public) subject
+    # it's the teacher's id and owner_student_id stays NULL. For a student's
+    # personal subject (NotebookLM-style), teacher_id = student.id AND
+    # owner_student_id = student.id — the second column is the visibility flag.
     teacher_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    owner_student_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
     )
     college_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("colleges.id", ondelete="CASCADE"), index=True
@@ -152,12 +162,21 @@ class Subject(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    teacher: Mapped["User"] = relationship(back_populates="owned_subjects")
+    # Two FKs to users.id (teacher_id + owner_student_id) → SQLAlchemy needs
+    # the explicit foreign_keys hint to know which one this relationship rides.
+    teacher: Mapped["User"] = relationship(
+        back_populates="owned_subjects", foreign_keys=[teacher_id]
+    )
     documents: Mapped[list["Document"]] = relationship(
         back_populates="subject",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+
+    @property
+    def is_private(self) -> bool:
+        """True iff this subject is a student's personal notebook."""
+        return self.owner_student_id is not None
 
 
 class DocumentStatus(str, enum.Enum):

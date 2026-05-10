@@ -60,6 +60,7 @@ export default function NoteAssistantPage() {
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
   const [subjectsError, setSubjectsError] = useState<string | null>(null)
+  const [creatingSubject, setCreatingSubject] = useState(false)
 
   const [activeSubjectId, setActiveSubjectId] = useState<string | null>(null)
   const [session, setSession] = useState<ChatSession | null>(null)
@@ -361,14 +362,51 @@ export default function NoteAssistantPage() {
     [subjects, activeSubjectId],
   )
 
+  const handleCreateSubject = async () => {
+    if (creatingSubject) return
+    const raw = window.prompt(
+      'Name your notebook (e.g. "DAA self-study", "Cracking DSA")',
+      '',
+    )
+    const name = raw?.trim()
+    if (!name) return
+    setCreatingSubject(true)
+    setSubjectsError(null)
+    try {
+      const created = await subjectsApi.create({ name })
+      setSubjects((prev) => [created, ...prev])
+      setActiveSubjectId(created.id)
+    } catch (err) {
+      setSubjectsError(
+        err instanceof ApiError && typeof err.detail === 'string'
+          ? err.detail
+          : 'Could not create that notebook',
+      )
+    } finally {
+      setCreatingSubject(false)
+    }
+  }
+
   // ── Left panel: subject list + your notes ──
   const leftPanel = (
     <div className="space-y-1">
-      <div className="flex items-center gap-2 mb-3 px-2">
-        <BookOpen className="h-4 w-4 text-[var(--text-tertiary)]" />
-        <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-          Subjects
-        </span>
+      <div className="flex items-center justify-between gap-2 mb-3 px-2">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-[var(--text-tertiary)]" />
+          <span className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
+            Subjects
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleCreateSubject()}
+          disabled={creatingSubject}
+          className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50"
+          title="Create your own notebook"
+        >
+          <Plus className="h-3 w-3" />
+          {creatingSubject ? 'Creating…' : 'New'}
+        </button>
       </div>
 
       {subjectsLoading && (
@@ -384,13 +422,20 @@ export default function NoteAssistantPage() {
       )}
 
       {!subjectsLoading && !subjectsError && subjects.length === 0 && (
-        <div className="px-3 py-3 text-xs text-[var(--text-tertiary)]">
-          No subjects yet. Ask a teacher to upload course material.
+        <div className="px-3 py-3 text-xs text-[var(--text-tertiary)] leading-snug">
+          No subjects yet. Hit <span className="font-semibold">+ New</span>
+          {' '}to start your own notebook, or wait for a teacher to upload
+          course material.
         </div>
       )}
 
       {subjects.map((subject) => {
         const isActive = subject.id === activeSubjectId
+        const isPersonal = subject.owner_student_id === currentUserId
+        // For a student's personal notebook the auto-generated `note-xxxxxxxx`
+        // code is meaningless — show the name as the primary label instead.
+        const primary = isPersonal ? subject.name : subject.code
+        const secondary = isPersonal ? 'Your notebook' : subject.name
         return (
           <motion.button
             key={subject.id}
@@ -406,11 +451,13 @@ export default function NoteAssistantPage() {
             }`}
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <FileText
+                className={`h-3.5 w-3.5 shrink-0 ${isPersonal ? 'text-primary' : ''}`}
+              />
               <div className="min-w-0">
-                <span className="text-sm font-medium block">{subject.code}</span>
+                <span className="text-sm font-medium block truncate">{primary}</span>
                 <span className="text-[10px] text-[var(--text-tertiary)] truncate block">
-                  {subject.name}
+                  {secondary}
                 </span>
               </div>
             </div>

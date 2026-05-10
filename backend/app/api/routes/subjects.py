@@ -1,11 +1,11 @@
-"""Subject endpoints: CRUD for teacher-owned subjects."""
+"""Subject endpoints: CRUD for teacher-owned subjects + student notebooks."""
 from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, status
 
-from app.api.deps import CurrentUser, DbSession, require_role
+from app.api.deps import CurrentUser, DbSession
 from app.schemas.subject import SubjectCreate, SubjectResponse, SubjectUpdate
 from app.services import subject as subject_service
 
@@ -25,8 +25,11 @@ def list_subjects(db: DbSession, current_user: CurrentUser) -> list[SubjectRespo
     "/",
     response_model=SubjectResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_role("teacher", "admin"))],
-    summary="Create a new subject",
+    summary=(
+        "Create a new subject. Teachers/admins create public subjects "
+        "(must supply `code`); students create personal notebooks (code "
+        "auto-generated, visibility scoped to themselves)."
+    ),
 )
 def create_subject(
     data: SubjectCreate,
@@ -52,8 +55,7 @@ def get_subject(
 @router.patch(
     "/{subject_id}",
     response_model=SubjectResponse,
-    dependencies=[Depends(require_role("teacher", "admin"))],
-    summary="Update a subject",
+    summary="Update a subject (students can patch their own notebooks)",
 )
 def update_subject(
     subject_id: uuid.UUID,
@@ -67,8 +69,10 @@ def update_subject(
 @router.delete(
     "/{subject_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_role("teacher", "admin"))],
-    summary="Delete a subject (and cascade its documents + quizzes)",
+    summary=(
+        "Delete a subject. Students can delete their own notebooks; "
+        "teachers/admins handle the public corpus."
+    ),
 )
 def delete_subject(
     subject_id: uuid.UUID,
