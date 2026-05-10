@@ -7,6 +7,7 @@ import TopBar from './TopBar'
 import GradientMesh from './GradientMesh'
 import PageTransition from './PageTransition'
 import NotificationToasts from './NotificationToasts'
+import ErrorBoundary from '../ErrorBoundary'
 import { useAuthStore } from '../../store/authStore'
 import { useNotificationsSocket } from '../../hooks/useNotificationsSocket'
 
@@ -103,7 +104,9 @@ export default function AppLayout() {
         <main className="flex-1 p-6">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
-              <Outlet />
+              <ErrorBoundary scope={location.pathname}>
+                <Outlet />
+              </ErrorBoundary>
             </PageTransition>
           </AnimatePresence>
         </main>
