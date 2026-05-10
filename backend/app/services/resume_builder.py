@@ -499,6 +499,14 @@ def score_against_jd(
     resume.last_job_description = job_description[:8000]
     db.commit()
 
+    # ATS score feeds the placement pillar; refresh the composite score.
+    try:
+        from app.services import campus_iq_score
+        campus_iq_score.recompute_score(db, user)
+        db.commit()
+    except Exception as e:
+        logger.warning("CampusIQ score recompute after ATS scoring failed: %s", e)
+
     return ATSScoreResponse(
         score=score,
         matched_keywords=matched,

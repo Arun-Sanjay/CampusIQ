@@ -62,6 +62,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
 
   // Edit form state
   const [editBranch, setEditBranch] = useState('')
@@ -188,9 +189,19 @@ export default function ProfilePage() {
                 variant="secondary"
                 icon={Share2}
                 size="sm"
-                onClick={() => navigator.clipboard.writeText(window.location.href)}
+                onClick={async () => {
+                  const url = `${window.location.origin}/p/${profile.user_id}`
+                  try {
+                    await navigator.clipboard.writeText(url)
+                    setShareCopied(true)
+                    setTimeout(() => setShareCopied(false), 1800)
+                  } catch {
+                    // clipboard may be blocked in non-https; fall back to prompt
+                    window.prompt('Copy your share link:', url)
+                  }
+                }}
               >
-                Share
+                {shareCopied ? 'Link copied' : 'Share'}
               </Button>
             </div>
           </div>

@@ -454,6 +454,13 @@ export const gamificationApi = {
   recomputeScore: () => api.post<{ total: number; academic: number; skill: number; interview: number; placement: number }>('/gamification/score/me/recompute'),
 }
 
+// ── Public Recruiter Profile (Phase 21, F15) — no auth ──
+
+export const publicProfileApi = {
+  get: (studentId: string) =>
+    api.get<PublicProfileResponse>(`/profile/public/${studentId}`),
+}
+
 // ── Job Tracker (Phase 17, F12) ──
 
 export const jobsApi = {

@@ -14,6 +14,9 @@ import LandingPage from '../pages/auth/LandingPage'
 import LoginPage from '../pages/auth/LoginPage'
 import SignupPage from '../pages/auth/SignupPage'
 
+// Public pages (no auth, accessible to anyone)
+import RecruiterProfilePage from '../pages/public/RecruiterProfilePage'
+
 // Student pages
 import StudentDashboard from '../pages/student/DashboardPage'
 import NoteAssistantPage from '../pages/student/NoteAssistantPage'
@@ -59,6 +62,9 @@ const router = createBrowserRouter(
     <>
       {/* Landing is always public */}
       <Route path="/" element={<LandingPage />} />
+
+      {/* Public recruiter profile (F15) — no auth, share-link friendly */}
+      <Route path="p/:studentId" element={<RecruiterProfilePage />} />
 
       {/* Login/Signup — redirect to home if already authenticated */}
       <Route element={<PublicOnlyRoute />}>

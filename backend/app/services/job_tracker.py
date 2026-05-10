@@ -254,6 +254,7 @@ def save_or_update_application(
         existing.fit_score = Decimal(f"{fit:.2f}")
         db.commit()
         db.refresh(existing)
+        _recompute_score_silently(db, user)
         return _to_application_response(existing, job, fit)
 
     app = JobApplication(
@@ -266,6 +267,7 @@ def save_or_update_application(
     db.add(app)
     db.commit()
     db.refresh(app)
+    _recompute_score_silently(db, user)
     return _to_application_response(app, job, fit)
 
 
@@ -307,6 +309,24 @@ def delete_application(
         raise HTTPException(status_code=403, detail="You don't own this application")
     db.delete(app)
     db.commit()
+    _recompute_score_silently(db, user)
+
+
+def _recompute_score_silently(db: Session, user: User) -> None:
+    """Refresh the placement pillar after any application change.
+
+    Silently logs and swallows errors — a stale score is a much smaller
+    surprise than a 500 on a Kanban move.
+    """
+    try:
+        from app.services import campus_iq_score
+        campus_iq_score.recompute_score(db, user)
+        db.commit()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            "CampusIQ score recompute after application change failed: %s", e
+        )
 
 
 def list_my_board(db: Session, user: User) -> JobBoardResponse:

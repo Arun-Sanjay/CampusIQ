@@ -17,6 +17,7 @@ from app.api.routes import (
     interviews,
     jobs,
     notifications,
+    public_profile,
     quizzes,
     resume,
     skills,
@@ -50,3 +51,4 @@ api_router.include_router(algorithms.router, prefix="/algorithms", tags=["algori
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(notifications.router, prefix="/ws", tags=["websockets"])
 api_router.include_router(boss_battles.router, prefix="/boss-battles", tags=["boss-battles"])
+api_router.include_router(public_profile.router, prefix="/profile/public", tags=["public-profile"])

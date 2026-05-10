@@ -249,6 +249,24 @@ def get_profile(db: Session, user: User) -> PublicProfileResponse:
     )
 
 
+def get_public_profile_by_id(
+    db: Session, student_id: uuid.UUID
+) -> PublicProfileResponse:
+    """Read-only profile view for an arbitrary student (used by the recruiter
+    share-link page at /p/:studentId). No auth required; only public-safe
+    fields are returned via PublicProfileResponse.
+
+    Raises 404 if the user doesn't exist or isn't a student.
+    """
+    user = db.get(User, student_id)
+    if user is None or user.role != UserRole.STUDENT:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No public profile for this id.",
+        )
+    return get_profile(db, user)
+
+
 def update_profile(
     db: Session,
     user: User,

@@ -664,7 +664,7 @@ def complete_and_debrief(
     db.commit()
     db.refresh(session)
 
-    # XP reward for finishing a full interview
+    # XP reward for finishing a full interview + interview-pillar recompute
     try:
         # Resolve the student user
         from app.models.user import User as UserModel
@@ -678,9 +678,35 @@ def complete_and_debrief(
                 reference_id=session.id,
                 bonus_multiplier=bonus_factor,
             )
+            # Refresh the CampusIQ score so the interview pillar reflects this run.
+            from app.services import campus_iq_score
+            campus_iq_score.recompute_score(db, student)
             db.commit()
     except Exception as e:
-        logger.warning("XP award (mock interview) failed: %s", e)
+        logger.warning("XP award / score recompute (mock interview) failed: %s", e)
+
+    # Phase 9 — push the debrief notification so the student sees a toast
+    # the moment the WebSocket relays it.
+    try:
+        from app.models.algorithm import NotificationType
+        from app.services import notifications as notifications_service
+
+        verdict = (session.feedback_report or {}).get("hire_verdict") or "complete"
+        notifications_service.publish_sync(
+            db,
+            user_id=session.student_id,
+            notification_type=NotificationType.INTERVIEW_FEEDBACK,
+            title=f"Interview complete: {session.company_target or 'Mock interview'}",
+            content=f"Overall {overall:.1f}/100 — verdict: {verdict.replace('_', ' ')}.",
+            extra={
+                "session_id": str(session.id),
+                "overall_score": overall,
+                "hire_verdict": verdict,
+            },
+        )
+        db.commit()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Mock interview notification failed: %s", e)
 
     return session
 
