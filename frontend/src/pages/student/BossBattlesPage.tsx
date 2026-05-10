@@ -17,6 +17,7 @@ import { ApiError, bossBattlesApi } from '../../api/client'
 import type {
   BossBattle,
   BossBattleDetail,
+  BossBattleLeaderboardRow,
   BossBattleListResponse,
   BossBattleStatus,
 } from '../../types'
@@ -63,10 +64,13 @@ export default function BossBattlesPage() {
   const [lastResult, setLastResult] = useState<
     | {
         battleId: string
+        battleTitle: string
         score: number
         correct: number
         total: number
         bonus: number
+        rank: number | null
+        leaderboard: BossBattleLeaderboardRow[]
       }
     | null
   >(null)
@@ -148,12 +152,25 @@ export default function BossBattlesPage() {
         answers: activeAnswers,
         elapsed_seconds: elapsed,
       })
+      // Refetch the battle detail so we can show the leaderboard reflecting
+      // this fresh submission (best-effort — leaderboard panel is hidden if
+      // the refetch fails).
+      let leaderboard: BossBattleLeaderboardRow[] = []
+      try {
+        const detail = await bossBattlesApi.get(activeBattle.id)
+        leaderboard = detail.leaderboard ?? []
+      } catch {
+        /* keep going — leaderboard is optional polish */
+      }
       setLastResult({
         battleId: activeBattle.id,
+        battleTitle: activeBattle.title,
         score: result.score,
         correct: result.correct_count,
         total: result.total_questions,
         bonus: result.speed_bonus,
+        rank: result.entry.rank,
+        leaderboard,
       })
       setActiveBattle(null)
       void reload()
@@ -316,19 +333,53 @@ export default function BossBattlesPage() {
 
       {lastResult && (
         <motion.div variants={fadeUp}>
-          <Card className="border-success/30 bg-success/5">
-            <div className="flex items-center gap-3">
-              <Trophy className="h-5 w-5 text-success" />
-              <div>
-                <p className="text-sm font-semibold text-[var(--text-primary)]">
-                  Final score: {lastResult.score.toFixed(0)}
-                </p>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  {lastResult.correct}/{lastResult.total} correct · speed bonus +
-                  {lastResult.bonus.toFixed(0)}
-                </p>
+          <Card className="border-success/30 bg-success/5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <Trophy className="h-5 w-5 text-success" />
+                <div>
+                  <p className="text-sm font-semibold text-[var(--text-primary)]">
+                    {lastResult.battleTitle} — final {lastResult.score.toFixed(0)}
+                  </p>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    {lastResult.correct}/{lastResult.total} correct · speed bonus +
+                    {lastResult.bonus.toFixed(0)}
+                    {lastResult.rank ? ` · rank #${lastResult.rank}` : ''}
+                  </p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setLastResult(null)}
+                className="text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                aria-label="Dismiss result"
+              >
+                Dismiss
+              </button>
             </div>
+            {lastResult.leaderboard.length > 0 && (
+              <div className="space-y-1.5">
+                <CardLabel className="block uppercase">Top performers</CardLabel>
+                <ol className="space-y-1">
+                  {lastResult.leaderboard.slice(0, 5).map((row) => (
+                    <li
+                      key={`${row.student_id}-${row.rank}`}
+                      className="flex items-center justify-between gap-3 text-sm py-1.5 px-2 rounded-md bg-[var(--bg-tertiary)]/40"
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="font-mono text-xs text-[var(--text-tertiary)] w-5 text-right">
+                          {row.rank}
+                        </span>
+                        <span className="text-[var(--text-primary)]">{row.name}</span>
+                      </span>
+                      <span className="font-semibold tabular-nums text-[var(--text-primary)]">
+                        {row.score.toFixed(0)}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </Card>
         </motion.div>
       )}
