@@ -7,14 +7,6 @@ const reveal = {
   transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
 }
 
-const ROUNDS = [
-  { id: 1, label: 'HR' },
-  { id: 2, label: 'TECH' },
-  { id: 3, label: 'SYS' },
-  { id: 4, label: 'MGR' },
-  { id: 5, label: 'NEG' },
-]
-
 export default function InterviewShowcase() {
   return (
     <section id="interview" className="section">
@@ -43,96 +35,28 @@ export default function InterviewShowcase() {
               }}
             />
             <div
-              className="glass img-slot"
-              data-img="interview-personas"
-              data-img-label="interview-personas"
+              className="glass"
               style={{
                 aspectRatio: '4 / 3',
                 width: '100%',
                 position: 'relative',
                 zIndex: 1,
-                padding: 28,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center',
-                gap: 28,
+                padding: 0,
+                overflow: 'hidden',
               }}
             >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                  width: '100%',
-                  maxWidth: 460,
-                  flexWrap: 'wrap',
-                }}
-              >
-                {ROUNDS.map((r, i) => (
-                  <motion.div
-                    key={r.id}
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4, delay: 0.15 + i * 0.08 }}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    <div className="round-avatar">
-                      {r.label}
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 10,
-                        letterSpacing: '0.16em',
-                        color: 'var(--landing-fg-faint)',
-                      }}
-                    >
-                      ROUND {r.id}
-                    </span>
-                  </motion.div>
-                ))}
-              </div>
-
-              <div
+              <img
+                src="/img/interview-personas.png"
+                alt="Five AI persona orbs representing the five interview rounds"
+                loading="lazy"
+                decoding="async"
                 style={{
                   width: '100%',
-                  maxWidth: 460,
-                  height: 6,
-                  borderRadius: 999,
-                  background: 'rgba(255,255,255,0.06)',
-                  overflow: 'hidden',
-                  position: 'relative',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
                 }}
-              >
-                <motion.div
-                  initial={{ scaleX: 0, originX: 0 }}
-                  animate={{ scaleX: 1 }}
-                  transition={{ duration: 1.4, delay: 0.4, ease: 'easeOut' }}
-                  style={{
-                    height: '100%',
-                    width: '100%',
-                    background: 'linear-gradient(90deg, #A78BFA, #22D3EE)',
-                    boxShadow: '0 0 16px rgba(167,139,250,0.5)',
-                  }}
-                />
-              </div>
-
-              <span
-                style={{
-                  fontFamily: 'Space Grotesk, sans-serif',
-                  fontSize: 11,
-                  letterSpacing: '0.18em',
-                  color: 'var(--landing-fg-faint)',
-                }}
-              >
-                HR → TECH → SYSTEM DESIGN → MANAGERIAL → NEGOTIATION
-              </span>
+              />
             </div>
           </motion.div>
 

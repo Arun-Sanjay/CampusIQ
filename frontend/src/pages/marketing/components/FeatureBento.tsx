@@ -113,10 +113,21 @@ export default function FeatureBento() {
               >
                 <div
                   className="img-slot"
-                  data-img={f.imgSlot}
-                  data-img-label={f.imgSlot}
                   style={{ flex: 1, minHeight: 0 }}
-                />
+                >
+                  <img
+                    src={`/img/${f.imgSlot}.png`}
+                    alt=""
+                    loading={i < 2 ? 'eager' : 'lazy'}
+                    decoding="async"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      display: 'block',
+                    }}
+                  />
+                </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                   <div className="tile-icon">
                     <f.icon size={20} strokeWidth={2} />
