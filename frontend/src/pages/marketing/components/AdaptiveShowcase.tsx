@@ -118,7 +118,7 @@ export default function AdaptiveShowcase() {
               <img
                 src="/img/adaptive-skill-graph.png"
                 alt="Stylized skill graph showing the shortest learning path"
-                loading="lazy"
+                loading="eager"
                 decoding="async"
                 style={{
                   width: '100%',

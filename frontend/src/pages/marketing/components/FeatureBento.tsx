@@ -110,29 +110,50 @@ export default function FeatureBento() {
                 {...card}
                 transition={{ ...card.transition, delay: i * 0.04 }}
                 className={`tile glow-border ${sizeClass}`}
+                style={{ padding: 0 }}
               >
+                <img
+                  src={`/img/${f.imgSlot}.png`}
+                  alt=""
+                  loading={i < 2 ? 'eager' : 'lazy'}
+                  decoding="async"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    zIndex: 0,
+                  }}
+                />
+                {/* Dark gradient overlay so the metadata reads cleanly */}
                 <div
-                  className="img-slot"
-                  style={{ flex: 1, minHeight: 0 }}
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background:
+                      'linear-gradient(180deg, rgba(6,7,10,0) 35%, rgba(6,7,10,0.55) 65%, rgba(6,7,10,0.92) 100%)',
+                    zIndex: 1,
+                    pointerEvents: 'none',
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 20,
+                    right: 20,
+                    bottom: 18,
+                    zIndex: 2,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 14,
+                  }}
                 >
-                  <img
-                    src={`/img/${f.imgSlot}.png`}
-                    alt=""
-                    loading={i < 2 ? 'eager' : 'lazy'}
-                    decoding="async"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      display: 'block',
-                    }}
-                  />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                   <div className="tile-icon">
                     <f.icon size={20} strokeWidth={2} />
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <h3
                       className="display"
                       style={{

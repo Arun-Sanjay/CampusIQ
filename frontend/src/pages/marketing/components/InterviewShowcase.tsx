@@ -48,7 +48,7 @@ export default function InterviewShowcase() {
               <img
                 src="/img/interview-personas.png"
                 alt="Five AI persona orbs representing the five interview rounds"
-                loading="lazy"
+                loading="eager"
                 decoding="async"
                 style={{
                   width: '100%',
