@@ -1,23 +1,36 @@
+import '../marketing/landing.css'
+
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Zap, Mail, Lock, User as UserIcon, GraduationCap, BookOpen, Shield, AlertCircle, type LucideIcon } from 'lucide-react'
-import { Button, Input } from '../../components/ui'
+import {
+  Mail,
+  Lock,
+  User as UserIcon,
+  GraduationCap,
+  BookOpen,
+  Shield,
+  AlertCircle,
+  ArrowRight,
+  type LucideIcon,
+} from 'lucide-react'
 import { clsx } from 'clsx'
 import { authApi, ApiError } from '../../api/client'
 import { useAuthStore } from '../../store/authStore'
 import type { SignupRequest, UserRole } from '../../types'
+import MarketingButton from '../marketing/components/MarketingButton'
+import MarketingInput from '../marketing/components/MarketingInput'
+import { Mark } from '../marketing/components/MarketingNav'
 
 interface RoleOption {
   value: UserRole
   label: string
   icon: LucideIcon
-  desc: string
 }
 
 const roles: RoleOption[] = [
-  { value: 'student', label: 'Student', icon: GraduationCap, desc: 'Access courses, quizzes, and placement prep' },
-  { value: 'teacher', label: 'Teacher', icon: BookOpen, desc: 'Upload content, create quizzes, track students' },
-  { value: 'admin', label: 'Admin', icon: Shield, desc: 'Manage platform, users, and college data' },
+  { value: 'student', label: 'Student', icon: GraduationCap },
+  { value: 'teacher', label: 'Teacher', icon: BookOpen },
+  { value: 'admin', label: 'Admin', icon: Shield },
 ]
 
 const roleToHome: Record<UserRole, string> = {
@@ -90,10 +103,9 @@ export default function SignupPage() {
       navigate(roleToHome[response.user.role], { replace: true })
     } catch (err) {
       if (err instanceof ApiError) {
-        // Pydantic validation errors come as a list; pull out the first message
         let detail: unknown = err.detail
         if (Array.isArray(detail)) {
-          detail = detail[0]?.msg || 'Invalid input'
+          detail = (detail[0] as { msg?: string })?.msg || 'Invalid input'
         }
         setError(typeof detail === 'string' ? detail : 'Signup failed')
       } else {
@@ -105,131 +117,271 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 py-8" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-      <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center mb-4">
-            <Zap className="h-6 w-6 text-primary-foreground" />
+    <div className="landing-theme">
+      <div
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '32px 20px',
+          position: 'relative',
+        }}
+      >
+        <span
+          aria-hidden
+          className="halo"
+          style={{
+            width: 460,
+            height: 460,
+            background:
+              'radial-gradient(circle, rgba(34,211,238,0.4), transparent 60%)',
+            top: '-120px',
+            right: '-80px',
+          }}
+        />
+
+        <div
+          style={{
+            width: '100%',
+            maxWidth: 460,
+            position: 'relative',
+            zIndex: 1,
+          }}
+        >
+          <Link
+            to="/"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              textDecoration: 'none',
+              color: 'inherit',
+              marginBottom: 28,
+            }}
+          >
+            <Mark size={28} />
+            <span
+              className="display"
+              style={{ fontSize: 18, fontWeight: 600 }}
+            >
+              CampusIQ
+            </span>
+          </Link>
+
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
+            <h1
+              className="display"
+              style={{
+                fontSize: 'clamp(26px, 3.5vw, 36px)',
+                margin: '0 0 8px',
+              }}
+            >
+              Create your <span className="gradient-text">account</span>
+            </h1>
+            <p
+              style={{
+                color: 'var(--landing-fg-muted)',
+                fontSize: 14,
+                margin: 0,
+              }}
+            >
+              Join CampusIQ today
+            </p>
           </div>
-          <h1 className="text-xl font-bold text-[var(--text-primary)]">Create your account</h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-1">Join CampusIQ today</p>
-        </div>
 
-        <form onSubmit={handleSubmit} className="card p-6 space-y-4">
-          {error && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-danger/10 border border-danger/20 text-sm text-danger">
-              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <span>{error}</span>
+          <form
+            onSubmit={handleSubmit}
+            className="glass"
+            style={{
+              padding: 26,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+            }}
+          >
+            {error && (
+              <div
+                role="alert"
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  padding: 12,
+                  borderRadius: 10,
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  color: '#FCA5A5',
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                }}
+              >
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <MarketingInput
+              label="Full name"
+              icon={UserIcon}
+              placeholder="Your full name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+              disabled={loading}
+              autoComplete="name"
+            />
+            <MarketingInput
+              label="Email"
+              type="email"
+              icon={Mail}
+              placeholder="you@college.edu"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              required
+              disabled={loading}
+              autoComplete="email"
+            />
+            <MarketingInput
+              label="Password"
+              type="password"
+              icon={Lock}
+              placeholder="Min 8 chars, letters + numbers"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required
+              disabled={loading}
+              autoComplete="new-password"
+            />
+
+            <div>
+              <label className="lbl">I am a</label>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 8,
+                }}
+              >
+                {roles.map((r) => {
+                  const active = form.role === r.value
+                  return (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, role: r.value })}
+                      disabled={loading}
+                      className={clsx(active && 'active')}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '14px 10px',
+                        borderRadius: 12,
+                        border: active
+                          ? '1px solid rgba(167,139,250,0.6)'
+                          : '1px solid var(--landing-border)',
+                        background: active
+                          ? 'linear-gradient(180deg, rgba(139,92,246,0.18), rgba(34,211,238,0.06))'
+                          : 'rgba(255,255,255,0.03)',
+                        color: active
+                          ? 'var(--landing-fg)'
+                          : 'var(--landing-fg-muted)',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        opacity: loading ? 0.5 : 1,
+                        transition: 'all 0.2s ease',
+                        font: 'inherit',
+                        boxShadow: active
+                          ? '0 0 24px rgba(139, 92, 246, 0.18)'
+                          : 'none',
+                      }}
+                    >
+                      <r.icon size={18} strokeWidth={2} />
+                      <span style={{ fontSize: 12, fontWeight: 500 }}>
+                        {r.label}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          )}
 
-          <Input
-            label="FULL NAME"
-            icon={UserIcon}
-            placeholder="Your full name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            required
-            disabled={loading}
-            autoComplete="name"
-          />
-          <Input
-            label="EMAIL"
-            type="email"
-            icon={Mail}
-            placeholder="you@college.edu"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            required
-            disabled={loading}
-            autoComplete="email"
-          />
-          <Input
-            label="PASSWORD"
-            type="password"
-            icon={Lock}
-            placeholder="Min 8 chars, letters + numbers"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            required
-            disabled={loading}
-            autoComplete="new-password"
-          />
-
-          <div className="space-y-1.5">
-            <label className="label">I AM A</label>
-            <div className="grid grid-cols-3 gap-2">
-              {roles.map((r) => (
-                <button
-                  key={r.value}
-                  type="button"
-                  onClick={() => setForm({ ...form, role: r.value })}
+            {form.role === 'student' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <MarketingInput
+                  label="Branch"
+                  placeholder="CSE"
+                  value={form.branch}
+                  onChange={(e) => setForm({ ...form, branch: e.target.value })}
                   disabled={loading}
-                  className={clsx(
-                    'flex flex-col items-center gap-1.5 p-3 rounded-lg border transition-all duration-200',
-                    form.role === r.value
-                      ? 'border-primary bg-primary/5 text-[var(--text-primary)]'
-                      : 'border-[var(--border-default)] text-[var(--text-tertiary)] hover:border-[var(--border-strong)] hover:text-[var(--text-secondary)]',
-                    loading && 'opacity-50 cursor-not-allowed',
-                  )}
-                >
-                  <r.icon className="h-5 w-5" />
-                  <span className="text-xs font-medium">{r.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
+                />
+                <MarketingInput
+                  label="Semester"
+                  type="number"
+                  min={1}
+                  max={8}
+                  placeholder="4"
+                  value={form.semester}
+                  onChange={(e) => setForm({ ...form, semester: e.target.value })}
+                  disabled={loading}
+                />
+              </div>
+            )}
+            {form.role === 'teacher' && (
+              <>
+                <MarketingInput
+                  label="Department"
+                  placeholder="Computer Science"
+                  value={form.department_name}
+                  onChange={(e) =>
+                    setForm({ ...form, department_name: e.target.value })
+                  }
+                  disabled={loading}
+                />
+                <MarketingInput
+                  label="Designation"
+                  placeholder="Assistant Professor"
+                  value={form.designation}
+                  onChange={(e) => setForm({ ...form, designation: e.target.value })}
+                  disabled={loading}
+                />
+              </>
+            )}
 
-          {/* Role-specific fields */}
-          {form.role === 'student' && (
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                label="BRANCH"
-                placeholder="CSE"
-                value={form.branch}
-                onChange={(e) => setForm({ ...form, branch: e.target.value })}
-                disabled={loading}
-              />
-              <Input
-                label="SEMESTER"
-                type="number"
-                min="1"
-                max="8"
-                placeholder="4"
-                value={form.semester}
-                onChange={(e) => setForm({ ...form, semester: e.target.value })}
-                disabled={loading}
-              />
-            </div>
-          )}
-          {form.role === 'teacher' && (
-            <>
-              <Input
-                label="DEPARTMENT"
-                placeholder="Computer Science"
-                value={form.department_name}
-                onChange={(e) => setForm({ ...form, department_name: e.target.value })}
-                disabled={loading}
-              />
-              <Input
-                label="DESIGNATION"
-                placeholder="Assistant Professor"
-                value={form.designation}
-                onChange={(e) => setForm({ ...form, designation: e.target.value })}
-                disabled={loading}
-              />
-            </>
-          )}
+            <MarketingButton
+              type="submit"
+              loading={loading}
+              size="lg"
+              iconRight={ArrowRight}
+              disabled={!form.role}
+              style={{ marginTop: 6, justifyContent: 'center', width: '100%' }}
+            >
+              {loading ? 'Creating account…' : 'Create account'}
+            </MarketingButton>
+          </form>
 
-          <Button className="w-full" type="submit" loading={loading} disabled={!form.role}>
-            {loading ? 'Creating account…' : 'Create Account'}
-          </Button>
-        </form>
-
-        <p className="text-sm text-[var(--text-secondary)] text-center mt-4">
-          Already have an account?{' '}
-          <Link to="/login" className="text-[var(--text-primary)] font-medium hover:underline">Sign in</Link>
-        </p>
+          <p
+            style={{
+              textAlign: 'center',
+              fontSize: 13,
+              color: 'var(--landing-fg-muted)',
+              marginTop: 20,
+            }}
+          >
+            Already have an account?{' '}
+            <Link
+              to="/login"
+              style={{
+                color: 'var(--landing-fg)',
+                fontWeight: 500,
+                textDecoration: 'none',
+              }}
+            >
+              Sign in
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   )
