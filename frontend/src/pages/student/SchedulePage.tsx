@@ -500,13 +500,26 @@ function WeeklyGrid({
 }) {
   const ROW_HEIGHT = 48
   const HEADER_HEIGHT = 36
+  // Tighten the min column width as the day count goes up so 7 days fits
+  // a typical laptop without horizontal scroll, while 3 days still uses
+  // generous columns.
+  const minColWidth = days >= 7 ? 96 : days >= 5 ? 128 : 160
+
+  // Which day columns have at least one block in them — used to render a
+  // subtle "Free" label in days the scheduler left empty.
+  const daysWithWork = useMemo(() => {
+    const s = new Set<number>()
+    for (const b of blocks) if (!b.isLocked) s.add(b.dayIndex)
+    return s
+  }, [blocks])
+
   return (
     <div className="overflow-x-auto -mx-1 px-1">
       <div
         className="relative rounded-xl overflow-hidden border border-[var(--border-default)] bg-[var(--bg-elevated)]"
         style={{
           display: 'grid',
-          gridTemplateColumns: `64px repeat(${days}, minmax(140px, 1fr))`,
+          gridTemplateColumns: `56px repeat(${days}, minmax(${minColWidth}px, 1fr))`,
           gridTemplateRows: `${HEADER_HEIGHT}px repeat(${hourCount}, ${ROW_HEIGHT}px)`,
         }}
       >
@@ -562,6 +575,25 @@ function WeeklyGrid({
             />
           )),
         )}
+
+        {/* "Free" badge in any day column the scheduler didn't touch — runs
+            vertically through the middle hour of the column. */}
+        {Array.from({ length: days }).map((_, d) => {
+          if (daysWithWork.has(d)) return null
+          // Span all hour rows so the label can centre vertically.
+          return (
+            <div
+              key={`free-${d}`}
+              className="pointer-events-none flex items-center justify-center text-[10px] uppercase tracking-[0.18em] text-[var(--text-tertiary)]/60"
+              style={{
+                gridColumn: d + 2,
+                gridRow: `2 / span ${hourCount}`,
+              }}
+            >
+              Free
+            </div>
+          )
+        })}
 
         {/* Blocks layered on top — they share grid cells with backdrops but
             render last in the DOM so they paint over them. */}
