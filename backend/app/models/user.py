@@ -73,10 +73,16 @@ class User(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    # `Document` has two FKs to users.id now (`uploaded_by_id` and the new
+    # `owner_student_id` for NotebookLM-style private notes), so SQLAlchemy
+    # needs the explicit foreign-key hint to know which one this collection
+    # tracks. The matching hint on Document.uploaded_by is in the Document
+    # class definition below.
     uploaded_documents: Mapped[list["Document"]] = relationship(
         back_populates="uploaded_by",
         cascade="all, delete-orphan",
         passive_deletes=True,
+        foreign_keys="Document.uploaded_by_id",
     )
 
 
