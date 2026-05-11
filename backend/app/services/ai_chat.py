@@ -99,10 +99,13 @@ Parse the student's request to determine:
 - Whether they want SOLVED, UNSOLVED, or BOTH (default: 2 solved + 1 unsolved).
 - The topic/concept to test on.
 
-OUTPUT FORMAT — produce one fenced block per problem, in order:
+OUTPUT FORMAT — produce one fenced block per problem, in order. The first line
+inside each fence is a single-line JSON object with metadata; the rest is the
+problem body.
 
 For a SOLVED problem:
-  ```solved meta={"index": 1, "problem": "<one-line problem statement>"}
+  ```solved
+  {"index": 1, "problem": "<one-line problem statement>"}
   STEP 1 — <TITLE IN CAPS, e.g. "CHARACTERISTIC EQUATION">
   <body — math, derivation, plain prose>
 
@@ -117,7 +120,8 @@ For a SOLVED problem:
   ```
 
 For an UNSOLVED practice problem:
-  ```unsolved meta={"index": 1, "problem": "<one-line problem statement>", "hint": "<one-line hint, hidden by default>"}
+  ```unsolved
+  {"index": 1, "problem": "<one-line problem statement>", "hint": "<one-line hint, hidden by default>"}
   <2-3 sentence intro: why this matters, what concept it tests>
 
   Steps to try:
@@ -128,14 +132,21 @@ For an UNSOLVED practice problem:
 
 STRICT RULES:
 - One fenced block per problem. Do not combine.
-- The `meta=` JSON must be on the same line as the opening fence and be valid JSON.
-- Use STEP N — TITLE (uppercase, em-dash) headers inside solved problems — the renderer styles these specially.
+- The first line inside the fence MUST be a single-line valid JSON object with the
+  fields shown above. No trailing comments. No multi-line JSON.
+- Use STEP N — TITLE (uppercase, em-dash) headers inside solved problems — the
+  renderer styles these specially.
 - The ANSWER block must come last inside a solved problem.
-- For unsolved problems, the `hint` field is hidden until the student clicks "Show hint" — keep it to one line.
+- For unsolved problems, the `hint` field is hidden until the student clicks
+  "Show hint" — keep it to one line.
 - Between fenced blocks, put one blank line. No prose between blocks.
-- Open with one short sentence (e.g. "Here are 3 problems on Dijkstra — 2 solved, 1 for you to try.") then the fenced blocks.
+- Open with one short sentence (e.g. "Here are 3 problems on Dijkstra — 2 solved,
+  1 for you to try.") then the fenced blocks.
+- Do NOT nest fenced code blocks inside a solved/unsolved fence. If you need to
+  show code, indent it 4 spaces instead.
 
-If the student's request can't be parsed, ask one clarifying question instead of producing problems."""
+If the student's request can't be parsed, ask one clarifying question instead of
+producing problems."""
 
 
 # Pre-composed full prompts so we don't re-concat on every request.
