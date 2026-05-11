@@ -16,6 +16,7 @@ import SignupPage from '../pages/auth/SignupPage'
 
 // Public pages (no auth, accessible to anyone)
 import RecruiterProfilePage from '../pages/public/RecruiterProfilePage'
+import AgentInterviewPage from '../pages/AgentInterviewPage'
 
 // Student pages
 import StudentDashboard from '../pages/student/DashboardPage'
@@ -65,6 +66,9 @@ const router = createBrowserRouter(
 
       {/* Public recruiter profile (F15) — no auth, share-link friendly */}
       <Route path="p/:studentId" element={<RecruiterProfilePage />} />
+
+      {/* Phase 2 demo — ElevenLabs Conversational Agent voice interview, no auth */}
+      <Route path="agent" element={<AgentInterviewPage />} />
 
       {/* Login/Signup — redirect to home if already authenticated */}
       <Route element={<PublicOnlyRoute />}>
