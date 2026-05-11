@@ -12,10 +12,10 @@ export interface ChatMessageProps {
   isStreaming?: boolean
 }
 
-// Markdown component overrides — small, opinionated, themed via CSS variables so
-// they look at home in any of the 5 themes (light / dark / premium / aurora /
-// luxury). Keeps the rhythm of Claude's web UI: tighter headings than default
-// browser styles, code blocks with their own surface, indented lists.
+// Markdown component overrides — small, opinionated, themed via CSS variables
+// so they look at home in both the light and dark themes. Keeps the rhythm of
+// Claude's web UI: tighter headings than default browser styles, code blocks
+// with their own surface, indented lists.
 const markdownComponents: Components = {
   h1: ({ node: _n, ...props }) => (
     <h1

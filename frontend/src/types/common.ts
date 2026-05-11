@@ -5,8 +5,9 @@ import type { LucideIcon } from 'lucide-react'
 
 export type { LucideIcon }
 
-/** Theme variants — matches the 5-theme system in useTheme */
-export type Theme = 'light' | 'dark' | 'premium' | 'aurora' | 'luxury'
+/** Theme variants — only light & dark now. Earlier premium / aurora / luxury
+ *  were dropped (visually noisy, didn't earn their weight). */
+export type Theme = 'light' | 'dark'
 
 /** Generic API response wrapper for list endpoints */
 export interface Paginated<T> {

@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import type { Theme } from '../types'
 
-const THEMES: Theme[] = ['light', 'dark', 'premium', 'aurora', 'luxury']
+const THEMES: Theme[] = ['light', 'dark']
+
+// Any leftover stored value from when premium / aurora / luxury existed gets
+// silently swapped for `dark` on the next page load.
+const LEGACY_THEMES = ['premium', 'aurora', 'luxury']
 
 interface ThemeMeta {
   label: string
@@ -11,9 +15,6 @@ interface ThemeMeta {
 const THEME_META: Record<Theme, ThemeMeta> = {
   light: { label: 'Light', icon: 'Sun' },
   dark: { label: 'Dark', icon: 'Moon' },
-  premium: { label: 'Violet', icon: 'Sparkles' },
-  aurora: { label: 'Aurora', icon: 'Waves' },
-  luxury: { label: 'Luxury', icon: 'Crown' },
 }
 
 const getInitialTheme = (): Theme => {
@@ -25,7 +26,9 @@ const getInitialTheme = (): Theme => {
 
 function applyTheme(theme: Theme): void {
   const root = document.documentElement
-  THEMES.forEach((t) => root.classList.remove(t))
+  // Clear current + legacy classes so a user upgrading from a stale localStorage
+  // entry doesn't keep an .aurora / .luxury class hanging around.
+  for (const t of [...THEMES, ...LEGACY_THEMES]) root.classList.remove(t)
   if (theme !== 'light') root.classList.add(theme)
 }
 

@@ -1,4 +1,4 @@
-import { Bell, Search, Flame, Sun, Moon, Sparkles, Waves, Crown } from 'lucide-react'
+import { Bell, Search, Flame, Sun, Moon } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useTheme } from '../../hooks/useTheme'
 import type { Theme } from '../../types'
@@ -6,9 +6,6 @@ import type { Theme } from '../../types'
 const themeIcons: Record<Theme, LucideIcon> = {
   light: Sun,
   dark: Moon,
-  premium: Sparkles,
-  aurora: Waves,
-  luxury: Crown,
 }
 
 export interface TopBarProps {
