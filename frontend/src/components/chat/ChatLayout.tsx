@@ -3,12 +3,15 @@ import type { ReactNode } from 'react'
 import { clsx } from 'clsx'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
+import type { AssistantMode } from '../../types'
 
 export interface ChatLayoutMessage {
   role: 'user' | 'assistant'
   content: string
   sources?: string[]
   isStreaming?: boolean
+  /** Note Assistant mode the response was generated in (assistant rows only). */
+  mode?: AssistantMode | null
 }
 
 export interface ChatLayoutProps {

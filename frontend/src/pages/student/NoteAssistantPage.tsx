@@ -32,11 +32,39 @@ const fadeUp: Variants = {
   animate: { opacity: 1, y: 0, transition: { duration: 0.3 } },
 }
 
-const suggestedQuestions = [
-  'Explain the concept in simple terms',
-  'Give me a worked example',
-  'How does this connect to other topics?',
-]
+const SUGGESTED_BY_MODE: Record<AssistantMode, string[]> = {
+  explain: [
+    'Explain the core concept in simple terms',
+    'Walk me through the most important idea',
+    'How does this connect to other topics?',
+  ],
+  diagram: [
+    'Draw a flowchart for the main process',
+    'Show me the relationships as a diagram',
+    'Visualise the state transitions',
+  ],
+  questions: [
+    'Give me 2 solved + 1 practice problem on this topic',
+    'Quiz me with 3 unsolved problems',
+    'Show one worked example and one for me to try',
+  ],
+}
+
+const PLACEHOLDER_BY_MODE: Record<AssistantMode, string> = {
+  explain: 'Ask about',
+  diagram: 'Ask for a diagram of',
+  questions: 'Request practice on',
+}
+
+// Per-user-browser remembered mode so the picker stays where the student left it.
+const MODE_STORAGE_KEY = 'campusiq-note-assistant-mode'
+
+function readStoredMode(): AssistantMode {
+  if (typeof window === 'undefined') return 'explain'
+  const raw = window.localStorage.getItem(MODE_STORAGE_KEY)
+  if (raw === 'explain' || raw === 'diagram' || raw === 'questions') return raw
+  return 'explain'
+}
 
 const ACCEPTED_FILE_TYPES =
   '.pdf,.doc,.docx,.ppt,.pptx,.txt,.md,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,text/plain,text/markdown'
@@ -52,6 +80,7 @@ function backendMessageToLayout(m: ChatMessage): ChatLayoutMessage {
     role: m.role === 'assistant' ? 'assistant' : 'user',
     content: m.content,
     sources: m.source_citations?.map(citationLabel),
+    mode: m.mode ?? null,
   }
 }
 
@@ -73,7 +102,16 @@ export default function NoteAssistantPage() {
   const [streaming, setStreaming] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
   // Per-message Note Assistant mode (Explain / Diagram / Questions).
-  const [mode, setMode] = useState<AssistantMode>('explain')
+  // Initialised from localStorage so the picker stays where the student left it.
+  const [mode, setModeState] = useState<AssistantMode>(() => readStoredMode())
+  const setMode = (next: AssistantMode) => {
+    setModeState(next)
+    try {
+      window.localStorage.setItem(MODE_STORAGE_KEY, next)
+    } catch {
+      /* ignore quota / privacy-mode errors */
+    }
+  }
 
   // Personal notes the student has uploaded for the active subject.
   const [myNotes, setMyNotes] = useState<DocumentWithSubject[]>([])
@@ -285,11 +323,13 @@ export default function NoteAssistantPage() {
     if (!session || streaming) return
     setChatError(null)
 
-    // Optimistic user message + placeholder streaming assistant message
+    // Optimistic user message + placeholder streaming assistant message.
+    // Stamp the streaming placeholder with the current mode so the renderer
+    // can pop the correct cards as soon as the closing fence streams in.
     setMessages((prev) => [
       ...prev,
       { role: 'user', content: text },
-      { role: 'assistant', content: '', isStreaming: true },
+      { role: 'assistant', content: '', isStreaming: true, mode },
     ])
     setStreaming(true)
 
@@ -587,11 +627,11 @@ export default function NoteAssistantPage() {
         onSend={handleSend}
         placeholder={
           activeSubject
-            ? `Ask about ${activeSubject.code} notes...`
+            ? `${PLACEHOLDER_BY_MODE[mode]} ${activeSubject.code} notes...`
             : 'Select a subject to start chatting'
         }
         leftPanel={leftPanel}
-        suggestedQuestions={messages.length === 0 ? suggestedQuestions : undefined}
+        suggestedQuestions={messages.length === 0 ? SUGGESTED_BY_MODE[mode] : undefined}
         disabled={!session || streaming || sessionLoading}
         inputAccessory={
           <ModeSelector

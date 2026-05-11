@@ -294,10 +294,11 @@ export const chatApi = {
   },
 
   // Non-streaming convenience for tests / simple flows
-  sendMessageBlocking: (sessionId: string, content: string, subjectId?: string) =>
+  sendMessageBlocking: (sessionId: string, content: string, subjectId?: string, mode?: AssistantMode) =>
     api.post<ChatMessage>(`/chat/sessions/${sessionId}/messages/blocking`, {
       content,
       subject_id: subjectId,
+      mode,
     }),
 }
 

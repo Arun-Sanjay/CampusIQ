@@ -1,18 +1,29 @@
 import { useMemo } from 'react'
 import { clsx } from 'clsx'
-import { Bot } from 'lucide-react'
+import { Bot, BookOpen, Network, ListChecks } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
 import Avatar from '../ui/Avatar'
 import { baseMarkdownComponents } from './markdownComponents'
 import FenceDispatcher from './cards/FenceDispatcher'
+import type { AssistantMode } from '../../types'
 
 export interface ChatMessageProps {
   role: 'user' | 'assistant'
   content: string
   sources?: string[]
   isStreaming?: boolean
+  /** Mode the response was rendered in. Shows a small pill above the bubble
+   *  on assistant messages. Only meaningful for Note Assistant chats. */
+  mode?: AssistantMode | null
+}
+
+const MODE_PILL: Record<AssistantMode, { label: string; Icon: LucideIcon }> = {
+  explain: { label: 'Explain', Icon: BookOpen },
+  diagram: { label: 'Diagram', Icon: Network },
+  questions: { label: 'Questions', Icon: ListChecks },
 }
 
 // Languages we route into card components instead of rendering as plain code.
@@ -81,8 +92,9 @@ function buildAssistantComponents(isStreaming: boolean): Components {
   }
 }
 
-export default function ChatMessage({ role, content, sources, isStreaming }: ChatMessageProps) {
+export default function ChatMessage({ role, content, sources, isStreaming, mode }: ChatMessageProps) {
   const isUser = role === 'user'
+  const pill = !isUser && mode && MODE_PILL[mode] ? MODE_PILL[mode] : null
   const assistantComponents = useMemo(
     () => buildAssistantComponents(Boolean(isStreaming)),
     [isStreaming],
@@ -103,6 +115,12 @@ export default function ChatMessage({ role, content, sources, isStreaming }: Cha
       )}
 
       <div className={clsx('max-w-[75%] space-y-2', isUser && 'items-end')}>
+        {pill && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]">
+            <pill.Icon className="h-3 w-3" />
+            {pill.label}
+          </span>
+        )}
         <div
           className={clsx(
             'rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
