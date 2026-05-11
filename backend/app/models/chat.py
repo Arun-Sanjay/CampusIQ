@@ -67,6 +67,10 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     # Source citations: list of {document_id, chunk_index, title} for assistant messages
     source_citations: Mapped[list | None] = mapped_column(JSON)
+    # Loose-typed bag for assistant-message metadata. Currently only stores
+    # `{"mode": "explain"|"diagram"|"questions"}` for Note Assistant rows so the
+    # renderer knows which structured-output parser to use on history.
+    assistant_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

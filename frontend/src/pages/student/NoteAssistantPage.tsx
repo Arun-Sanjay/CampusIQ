@@ -13,11 +13,13 @@ import {
   XCircle,
 } from 'lucide-react'
 import ChatLayout, { type ChatLayoutMessage } from '../../components/chat/ChatLayout'
+import ModeSelector from '../../components/chat/ModeSelector'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import { ApiError, chatApi, documentsApi, subjectsApi } from '../../api/client'
 import { useAuthStore } from '../../store/authStore'
 import type {
+  AssistantMode,
   ChatMessage,
   ChatSession,
   DocumentWithSubject,
@@ -70,6 +72,8 @@ export default function NoteAssistantPage() {
   const [messages, setMessages] = useState<ChatLayoutMessage[]>([])
   const [streaming, setStreaming] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
+  // Per-message Note Assistant mode (Explain / Diagram / Questions).
+  const [mode, setMode] = useState<AssistantMode>('explain')
 
   // Personal notes the student has uploaded for the active subject.
   const [myNotes, setMyNotes] = useState<DocumentWithSubject[]>([])
@@ -297,6 +301,7 @@ export default function NoteAssistantPage() {
         sessionId: session.id,
         content: text,
         subjectId: activeSubjectId ?? undefined,
+        mode,
         signal: controller.signal,
         onChunk: (delta) => {
           setMessages((prev) => {
@@ -588,6 +593,13 @@ export default function NoteAssistantPage() {
         leftPanel={leftPanel}
         suggestedQuestions={messages.length === 0 ? suggestedQuestions : undefined}
         disabled={!session || streaming || sessionLoading}
+        inputAccessory={
+          <ModeSelector
+            value={mode}
+            onChange={setMode}
+            disabled={streaming || sessionLoading}
+          />
+        }
       />
     </div>
   )

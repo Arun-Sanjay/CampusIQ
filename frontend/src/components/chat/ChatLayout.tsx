@@ -20,6 +20,8 @@ export interface ChatLayoutProps {
   rightPanel?: ReactNode
   suggestedQuestions?: string[]
   className?: string
+  /** Rendered above the input (e.g. a mode selector). */
+  inputAccessory?: ReactNode
 }
 
 export default function ChatLayout({
@@ -31,6 +33,7 @@ export default function ChatLayout({
   rightPanel,
   suggestedQuestions,
   className,
+  inputAccessory,
 }: ChatLayoutProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -71,7 +74,12 @@ export default function ChatLayout({
         </div>
 
         <div className="border-t border-[var(--border-default)] pt-3">
-          <ChatInput onSend={onSend} placeholder={placeholder} disabled={disabled} />
+          <ChatInput
+            onSend={onSend}
+            placeholder={placeholder}
+            disabled={disabled}
+            topAccessory={inputAccessory}
+          />
         </div>
       </div>
 

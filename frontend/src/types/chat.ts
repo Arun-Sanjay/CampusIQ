@@ -6,6 +6,14 @@ export type ChatType = 'note_assistant' | 'college_gpt' | 'placement_chatbot' | 
 
 export type MessageRole = 'user' | 'assistant' | 'system'
 
+/**
+ * Note Assistant response modes — the student picks one per message.
+ * - explain   — concept explanation in plain markdown (default)
+ * - diagram   — Mermaid diagram followed by an explanation
+ * - questions — solved / unsolved practice problems in fenced cards
+ */
+export type AssistantMode = 'explain' | 'diagram' | 'questions'
+
 export interface SourceCitation {
   document_id: string
   document_title: string
@@ -21,6 +29,8 @@ export interface ChatMessage {
   role: MessageRole
   content: string
   source_citations: SourceCitation[] | null
+  /** Note Assistant mode the response was generated in (null for legacy + non-NA chats). */
+  mode?: AssistantMode | null
   created_at: string
 }
 
@@ -48,4 +58,6 @@ export interface ChatMessageRequest {
   content: string
   subject_id?: string
   stream?: boolean
+  /** Note Assistant mode (server ignores it for non-NA sessions). */
+  mode?: AssistantMode
 }

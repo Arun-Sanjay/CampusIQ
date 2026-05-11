@@ -38,12 +38,17 @@ def _to_message_response(message) -> ChatMessageResponse:
     citations: list[SourceCitation] | None = None
     if message.source_citations:
         citations = [SourceCitation(**c) for c in message.source_citations]
+    # `assistant_meta` is the loose-typed bag where Note Assistant rows stash
+    # `{"mode": "..."}`. We only surface fields the client actually uses today.
+    meta = message.assistant_meta or {}
+    mode = meta.get("mode") if isinstance(meta, dict) else None
     return ChatMessageResponse(
         id=message.id,
         session_id=message.session_id,
         role=message.role.value,
         content=message.content,
         source_citations=citations,
+        mode=mode,
         created_at=message.created_at,
     )
 
@@ -169,6 +174,7 @@ def send_message(
             session=session,
             user_message_text=data.content,
             subject_id=effective_subject_id,
+            mode=data.mode,
         ):
             yield delta
 
@@ -195,6 +201,7 @@ def send_message_blocking(
         session=session,
         user_message_text=data.content,
         subject_id=effective_subject_id,
+        mode=data.mode,
     )
     # Return the freshly-persisted assistant message
     messages = chat_service.list_messages(db, session)
