@@ -5,7 +5,7 @@ import {
   Calendar, FileText, Target, Mic, Video, Briefcase, MessageCircle,
   Zap, Trophy, User, Settings, ChevronLeft, ChevronRight,
   Upload, BarChart3, Users, Shield, Bell, ClipboardList,
-  GitBranch, AlertTriangle, LogOut, Swords,
+  GitBranch, AlertTriangle, LogOut, Swords, PenLine,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
@@ -92,6 +92,7 @@ const adminNav: NavSection[] = [
     items: [
       { to: '/admin', icon: LayoutDashboard, label: 'Overview', end: true },
       { to: '/admin/college-docs', icon: Upload, label: 'College Documents' },
+      { to: '/admin/knowledge', icon: PenLine, label: 'Knowledge Editor' },
       { to: '/admin/users', icon: Users, label: 'User Management' },
     ],
   },

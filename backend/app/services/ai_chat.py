@@ -17,10 +17,11 @@ import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.chat import ChatMessage, ChatSession, ChatType, MessageRole
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services import chat as chat_service
 from app.services import claude_client, vector_search
 from app.services.vector_search import CollegeSearchHit, SearchHit
@@ -59,6 +60,33 @@ Guidelines:
 - Use clear, conversational language and short paragraphs.
 - DO NOT make up policies that aren't in the documents.
 - DO NOT mention the word "context" or "excerpts" — just answer naturally."""
+
+
+ADMIN_KNOWLEDGE_SYSTEM = """You are CampusIQ's Knowledge Editor Assistant. You help administrators keep their college documents (handbook, timetable, placement records, hostel rules, faculty list) accurate.
+
+You are given the most relevant excerpts from the college's documents below as CONTEXT.
+
+When the admin describes a fact, rule, or correction:
+1. Look at the CONTEXT to find the chunk that most likely covers this topic.
+2. If a chunk matches, propose a precise rewrite of that chunk that incorporates the new information without losing existing facts.
+3. If no chunk matches, propose new text suitable for adding to the most relevant document.
+
+When you propose an edit, end your message with a fenced JSON block in this exact format:
+
+```edit-proposal
+{
+  "action": "update" | "create",
+  "document_id": "<uuid>",
+  "chunk_id": "<uuid or null for create>",
+  "chunk_index": <int or null>,
+  "proposed_text": "<the rewritten chunk text>",
+  "reasoning": "<one short sentence: what changed and why>"
+}
+```
+
+Only propose ONE edit per turn — if multiple changes are needed, propose the most important one first and tell the admin you'll handle the rest after they apply.
+
+If the admin is just asking a question (not requesting an edit), answer normally without a JSON block."""
 
 
 PLACEMENT_CHATBOT_SYSTEM = """You are CampusIQ Placement Coach — an AI mentor that helps engineering students prepare for campus placements.
@@ -116,6 +144,26 @@ def _format_college_chunks_as_context(hits: list[CollegeSearchHit]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _format_admin_chunks_as_context(hits: list[CollegeSearchHit]) -> str:
+    """Like the college formatter but includes document_id + chunk_id so the
+    Knowledge Editor assistant can reference them in the edit-proposal JSON."""
+    if not hits:
+        return "(No matching chunks found. Treat the user's statement as new information and propose a `create` action targeting the most relevant document — or, if no document is appropriate, ask which one to add it to.)"
+
+    parts: list[str] = []
+    for i, hit in enumerate(hits, start=1):
+        truncated = hit.chunk_text
+        if len(truncated) > MAX_CHUNK_CHARS:
+            truncated = truncated[:MAX_CHUNK_CHARS] + "…"
+        parts.append(
+            f"[{i}] {hit.document_category.upper()} — {hit.document_title} (chunk index {hit.chunk_index})\n"
+            f"document_id: {hit.document_id}\n"
+            f"chunk_id: {hit.chunk_id}\n"
+            f"---\n{truncated}"
+        )
+    return "\n\n===\n\n".join(parts)
+
+
 def _citations_from_hits(hits: list[SearchHit]) -> list[dict]:
     """Compact citation records for note-assistant chunks."""
     return [
@@ -166,6 +214,13 @@ def stream_rag_response(
     """
     is_college_gpt = session.chat_type == ChatType.COLLEGE_GPT
     is_placement_chatbot = session.chat_type == ChatType.PLACEMENT_CHATBOT
+    is_admin_knowledge = session.chat_type == ChatType.ADMIN_KNOWLEDGE
+
+    if is_admin_knowledge and user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can use the Knowledge Editor chat.",
+        )
 
     # ── 1. Retrieve relevant chunks (different table / filter per chat_type) ──
     if is_placement_chatbot:
@@ -181,7 +236,7 @@ def stream_rag_response(
         )
         citations = _citations_from_college_hits(college_hits)
         context_block = _format_college_chunks_as_context(college_hits)
-    elif is_college_gpt:
+    elif is_college_gpt or is_admin_knowledge:
         college_hits = vector_search.search_college_chunks(
             db,
             query=user_message_text,
@@ -189,7 +244,12 @@ def stream_rag_response(
             top_k=TOP_K,
         )
         citations = _citations_from_college_hits(college_hits)
-        context_block = _format_college_chunks_as_context(college_hits)
+        # Admin chat needs document_id + chunk_id in the prompt so the
+        # assistant can populate them in the edit-proposal JSON.
+        if is_admin_knowledge:
+            context_block = _format_admin_chunks_as_context(college_hits)
+        else:
+            context_block = _format_college_chunks_as_context(college_hits)
     else:
         hits = vector_search.search_chunks(
             db,
@@ -211,6 +271,13 @@ def stream_rag_response(
             f"=== RELEVANT EXCERPTS FROM PLACEMENT RECORDS ===\n\n"
             f"{context_block}\n\n"
             f"=== END OF EXCERPTS ==="
+        )
+    elif is_admin_knowledge:
+        system_prompt = (
+            f"{ADMIN_KNOWLEDGE_SYSTEM}\n\n"
+            f"=== CANDIDATE CHUNKS (each shows document_id, chunk_id, and current text) ===\n\n"
+            f"{context_block}\n\n"
+            f"=== END OF CHUNKS ==="
         )
     elif is_college_gpt:
         system_prompt = (

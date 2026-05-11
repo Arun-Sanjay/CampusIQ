@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import CurrentUser, DbSession
 from app.models.chat import ChatType
+from app.models.user import UserRole
 from app.schemas.chat import (
     ChatMessageRequest,
     ChatMessageResponse,
@@ -85,10 +86,16 @@ def create_session(
     db: DbSession,
     current_user: CurrentUser,
 ) -> ChatSessionResponse:
+    chat_type = ChatType(data.chat_type)
+    if chat_type == ChatType.ADMIN_KNOWLEDGE and current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can use the Knowledge Editor chat.",
+        )
     session = chat_service.create_session(
         db,
         user=current_user,
-        chat_type=ChatType(data.chat_type),
+        chat_type=chat_type,
         subject_id=data.subject_id,
         title=data.title,
     )

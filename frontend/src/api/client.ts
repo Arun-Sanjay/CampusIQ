@@ -25,8 +25,11 @@ import type {
   BossBattleListResponse,
   BossBattleSubmitResponse,
   ClassAnalytics,
+  ChunkCreate,
+  ChunkUpdate,
   CollegeDocument,
   CollegeDocumentCategory,
+  KnowledgeSuggestion,
   CompanyProfile,
   DashboardResponse,
   DoubtAnswerCreate,
@@ -335,6 +338,26 @@ export const collegeDocumentsApi = {
   },
   reprocess: (id: string) => api.post<CollegeDocument>(`/college-documents/${id}/reprocess`),
   delete: (id: string) => api.delete<void>(`/college-documents/${id}`),
+  // ── Knowledge Editor: chunk CRUD (admin-only) ──
+  listChunks: (id: string) =>
+    api.get<DocumentChunkPreview[]>(`/college-documents/${id}/chunks`),
+  updateChunk: (docId: string, chunkId: string, body: ChunkUpdate) =>
+    api.patch<DocumentChunkPreview>(
+      `/college-documents/${docId}/chunks/${chunkId}`,
+      body,
+    ),
+  createChunk: (docId: string, body: ChunkCreate) =>
+    api.post<DocumentChunkPreview>(`/college-documents/${docId}/chunks`, body),
+  deleteChunk: (docId: string, chunkId: string) =>
+    api.delete<void>(`/college-documents/${docId}/chunks/${chunkId}`),
+}
+
+export const knowledgeApi = {
+  suggest: (statement: string, hintCategory?: CollegeDocumentCategory) =>
+    api.post<KnowledgeSuggestion>('/college-documents/suggest', {
+      statement,
+      hint_category: hintCategory ?? null,
+    }),
 }
 
 // ── Quizzes (Phase 11, F3) ──

@@ -43,6 +43,7 @@ const pageTitles: Record<string, string> = {
   '/teacher/similarity': 'Similarity Checker',
   '/admin': 'Dashboard',
   '/admin/college-docs': 'College Documents',
+  '/admin/knowledge': 'Knowledge Editor',
   '/admin/users': 'User Management',
   '/admin/skill-analytics': 'Skill Analytics',
   '/admin/notifications': 'Notification Status',

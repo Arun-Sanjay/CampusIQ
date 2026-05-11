@@ -12,11 +12,15 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Up
 from app.api.deps import CurrentUser, DbSession, require_role
 from app.models.content import CollegeDocumentCategory
 from app.schemas.college_document import (
+    ChunkCreate,
+    ChunkUpdate,
     CollegeDocumentChunkPreview,
     CollegeDocumentResponse,
+    KnowledgeSuggestion,
+    KnowledgeSuggestRequest,
 )
-from app.services import college_document as college_doc_service
-from app.services import college_document_processor
+from app.services import chunk_edit, college_document as college_doc_service
+from app.services import college_document_processor, knowledge_suggest
 
 router = APIRouter()
 
@@ -161,3 +165,82 @@ def delete_college_document(
     current_user: CurrentUser,
 ) -> None:
     college_doc_service.delete_college_document(db, college_document_id, current_user)
+
+
+# ─────────────────────────────────────────────────────────────────
+# Knowledge Editor — admin-only chunk CRUD + AI-mediated suggestions
+# ─────────────────────────────────────────────────────────────────
+
+
+@router.patch(
+    "/{college_document_id}/chunks/{chunk_id}",
+    response_model=CollegeDocumentChunkPreview,
+    dependencies=[Depends(require_role("admin"))],
+    summary="Admin: rewrite a single chunk (re-embeds + recompresses)",
+)
+def patch_chunk(
+    college_document_id: uuid.UUID,
+    chunk_id: uuid.UUID,
+    body: ChunkUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> CollegeDocumentChunkPreview:
+    return chunk_edit.update_chunk_text(
+        db, current_user, college_document_id, chunk_id, body.chunk_text
+    )
+
+
+@router.post(
+    "/{college_document_id}/chunks",
+    response_model=CollegeDocumentChunkPreview,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("admin"))],
+    summary="Admin: append a new chunk to a college document",
+)
+def create_chunk(
+    college_document_id: uuid.UUID,
+    body: ChunkCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> CollegeDocumentChunkPreview:
+    return chunk_edit.append_chunk(
+        db,
+        current_user,
+        college_document_id,
+        body.chunk_text,
+        chunk_index=body.chunk_index,
+    )
+
+
+@router.delete(
+    "/{college_document_id}/chunks/{chunk_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_role("admin"))],
+    summary="Admin: delete a single chunk from a college document",
+)
+def delete_chunk(
+    college_document_id: uuid.UUID,
+    chunk_id: uuid.UUID,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> None:
+    chunk_edit.delete_chunk(db, current_user, college_document_id, chunk_id)
+
+
+@router.post(
+    "/suggest",
+    response_model=KnowledgeSuggestion,
+    dependencies=[Depends(require_role("admin"))],
+    summary="Admin: ask the AI to locate and rewrite a chunk for a natural-language update",
+)
+def suggest_knowledge_update(
+    body: KnowledgeSuggestRequest,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> KnowledgeSuggestion:
+    return knowledge_suggest.suggest_edit(
+        db,
+        current_user,
+        body.statement,
+        hint_category=body.hint_category,
+    )

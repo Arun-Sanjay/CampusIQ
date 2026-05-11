@@ -9,6 +9,9 @@ export interface ChatLayoutMessage {
   content: string
   sources?: string[]
   isStreaming?: boolean
+  /** Optional content rendered directly below the message bubble — used by
+   *  the Knowledge Editor chat to render an inline edit-proposal card. */
+  footer?: ReactNode
 }
 
 export interface ChatLayoutProps {
@@ -65,7 +68,10 @@ export default function ChatLayout({
             </div>
           )}
           {messages.map((msg, i) => (
-            <ChatMessage key={i} {...msg} />
+            <div key={i} className="space-y-2">
+              <ChatMessage role={msg.role} content={msg.content} sources={msg.sources} isStreaming={msg.isStreaming} />
+              {msg.footer}
+            </div>
           ))}
           <div ref={messagesEndRef} />
         </div>

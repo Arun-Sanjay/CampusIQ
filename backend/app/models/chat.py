@@ -17,6 +17,8 @@ class ChatType(str, enum.Enum):
     COLLEGE_GPT = "college_gpt"
     PLACEMENT_CHATBOT = "placement_chatbot"
     RESUME_BUILDER = "resume_builder"
+    # Admin-only conversation that proposes edits to college document chunks.
+    ADMIN_KNOWLEDGE = "admin_knowledge"
 
 
 class MessageRole(str, enum.Enum):

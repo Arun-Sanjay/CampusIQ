@@ -2,7 +2,12 @@
  * Chat types — mirror backend Pydantic schemas in backend/app/schemas/chat.py
  */
 
-export type ChatType = 'note_assistant' | 'college_gpt' | 'placement_chatbot' | 'resume_builder'
+export type ChatType =
+  | 'note_assistant'
+  | 'college_gpt'
+  | 'placement_chatbot'
+  | 'resume_builder'
+  | 'admin_knowledge'
 
 export type MessageRole = 'user' | 'assistant' | 'system'
 

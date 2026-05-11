@@ -53,6 +53,7 @@ import SimilarityCheckerPage from '../pages/teacher/SimilarityCheckerPage'
 // Admin pages
 import AdminDashboard from '../pages/admin/DashboardPage'
 import CollegeDocsPage from '../pages/admin/CollegeDocsPage'
+import KnowledgeEditorPage from '../pages/admin/KnowledgeEditorPage'
 import UserManagementPage from '../pages/admin/UserManagementPage'
 import SkillAnalyticsPage from '../pages/admin/SkillAnalyticsPage'
 import NotificationStatusPage from '../pages/admin/NotificationStatusPage'
@@ -119,6 +120,7 @@ const router = createBrowserRouter(
         <Route path="admin" element={<AppLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="college-docs" element={<CollegeDocsPage />} />
+          <Route path="knowledge" element={<KnowledgeEditorPage />} />
           <Route path="users" element={<UserManagementPage />} />
           <Route path="skill-analytics" element={<SkillAnalyticsPage />} />
           <Route path="notifications" element={<NotificationStatusPage />} />

@@ -7,7 +7,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-ChatTypeLiteral = Literal["note_assistant", "college_gpt", "placement_chatbot", "resume_builder"]
+ChatTypeLiteral = Literal[
+    "note_assistant",
+    "college_gpt",
+    "placement_chatbot",
+    "resume_builder",
+    "admin_knowledge",
+]
 MessageRoleLiteral = Literal["user", "assistant", "system"]
 
 

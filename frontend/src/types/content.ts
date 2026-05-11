@@ -113,3 +113,34 @@ export interface UploadCollegeDocumentOptions {
   title?: string
   documentCategory?: CollegeDocumentCategory
 }
+
+// ── Knowledge Editor — admin chunk CRUD + AI suggestions ──
+
+export interface ChunkUpdate {
+  chunk_text: string
+}
+
+export interface ChunkCreate {
+  chunk_text: string
+  chunk_index?: number
+}
+
+export interface SuggestionCandidate {
+  document_id: string
+  document_title: string
+  document_category: CollegeDocumentCategory
+  similarity: number
+}
+
+export interface KnowledgeSuggestion {
+  kind: 'update_existing' | 'create_new'
+  similarity: number
+  document_id: string | null
+  document_title: string | null
+  document_category: CollegeDocumentCategory | null
+  chunk_id: string | null
+  chunk_index: number | null
+  current_chunk_text: string | null
+  proposed_chunk_text: string
+  candidate_documents: SuggestionCandidate[]
+}
