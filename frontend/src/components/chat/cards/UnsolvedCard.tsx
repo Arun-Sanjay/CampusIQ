@@ -22,7 +22,7 @@ export interface UnsolvedCardProps {
 export default function UnsolvedCard({ index, problem, hint, body }: UnsolvedCardProps) {
   const badge = index != null && index > 1 ? `Your turn ${index}` : 'Your turn'
   return (
-    <section className="rounded-xl border border-warning/40 bg-warning/5 p-4 my-3 shadow-[var(--shadow-card)]">
+    <section className="rounded-xl border border-warning/40 bg-warning/5 p-4 my-3 shadow-[var(--shadow-card)] min-w-0 max-w-full overflow-hidden">
       <header className="flex items-start gap-3 mb-2">
         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold uppercase tracking-wider bg-warning/15 text-warning border border-warning/30 shrink-0 mt-0.5">
           {badge}

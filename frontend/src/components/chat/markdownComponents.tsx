@@ -94,7 +94,12 @@ export const baseMarkdownComponents: Components = {
     )
   },
   pre: ({ node: _n, children, ...props }) => (
-    <pre className="my-2 not-prose" {...props}>
+    // `whitespace-pre-wrap` + `break-words` so an unnamed fenced block
+    // (which the LLM occasionally uses for prose) wraps inside the bubble
+    // instead of forcing horizontal page scroll. Block code with a language
+    // class on its inner <code> still gets its own `whitespace-pre overflow-x-auto`
+    // and ignores this — which is what we want for actual code.
+    <pre className="my-2 not-prose max-w-full overflow-x-auto whitespace-pre-wrap break-words" {...props}>
       {children}
     </pre>
   ),

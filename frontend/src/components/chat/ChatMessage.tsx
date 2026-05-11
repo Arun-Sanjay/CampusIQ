@@ -114,7 +114,17 @@ export default function ChatMessage({ role, content, sources, isStreaming, mode 
         </div>
       )}
 
-      <div className={clsx('max-w-[75%] space-y-2', isUser && 'items-end')}>
+      <div
+        className={clsx(
+          'space-y-2 min-w-0',
+          // Assistant bubbles need more horizontal room than user bubbles —
+          // the mode-rendered Solved / Unsolved / Diagram cards look cramped
+          // at the original 75% cap and were overflowing the viewport on
+          // long step bodies. `min-w-0` lets the flex parent actually enforce
+          // the cap.
+          isUser ? 'max-w-[75%] items-end' : 'max-w-[88%]',
+        )}
+      >
         {pill && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]">
             <pill.Icon className="h-3 w-3" />
@@ -123,7 +133,7 @@ export default function ChatMessage({ role, content, sources, isStreaming, mode 
         )}
         <div
           className={clsx(
-            'rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
+            'rounded-2xl px-4 py-2.5 text-sm leading-relaxed min-w-0 overflow-hidden',
             isUser
               ? 'bg-primary text-primary-foreground rounded-tr-md whitespace-pre-wrap'
               : 'card rounded-tl-md text-[var(--text-primary)] chat-markdown',

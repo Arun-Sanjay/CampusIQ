@@ -11,7 +11,7 @@ export interface AnswerBoxProps {
  */
 export default function AnswerBox({ body }: AnswerBoxProps) {
   return (
-    <div className="rounded-lg border border-success/40 bg-success/5 p-3 my-2">
+    <div className="rounded-lg border border-success/40 bg-success/5 p-3 my-2 min-w-0 max-w-full overflow-hidden">
       <div className="text-[11px] font-semibold uppercase tracking-wider text-success mb-1.5">
         Answer
       </div>

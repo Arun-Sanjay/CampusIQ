@@ -87,7 +87,7 @@ export default function SolvedCard({ index, problem, body }: SolvedCardProps) {
   const badge = index != null ? `Solved ${index}` : 'Solved'
 
   return (
-    <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 my-3 shadow-[var(--shadow-card)]">
+    <section className="rounded-xl border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 my-3 shadow-[var(--shadow-card)] min-w-0 max-w-full overflow-hidden">
       <header className="flex items-start gap-3 mb-3">
         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold uppercase tracking-wider bg-success/10 text-success border border-success/20 shrink-0 mt-0.5">
           {badge}
