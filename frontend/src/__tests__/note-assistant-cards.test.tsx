@@ -1,6 +1,25 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import ChatMessage from '../components/chat/ChatMessage'
+
+// Hoisted mock for the lazy-loaded `mermaid` module so tests don't need the
+// real ~600KB library and don't trigger network/disk fetches in jsdom.
+const mockRender = vi.fn(async (id: string, source: string) => ({
+  svg: `<svg data-testid="mermaid-svg" data-source="${source}" data-id="${id}"></svg>`,
+}))
+const mockInitialize = vi.fn()
+
+vi.mock('mermaid', () => ({
+  default: {
+    initialize: mockInitialize,
+    render: mockRender,
+  },
+}))
+
+afterEach(() => {
+  mockRender.mockClear()
+  mockInitialize.mockClear()
+})
 
 describe('ChatMessage — Note Assistant cards', () => {
   it('renders a SolvedCard from a ```solved fence with stepped + answer sub-blocks', () => {
@@ -70,6 +89,37 @@ describe('ChatMessage — Note Assistant cards', () => {
     // Step + answer still parsed from body
     expect(screen.getByText('STEP 1 — ONLY STEP')).toBeInTheDocument()
     expect(screen.getByText('Answer')).toBeInTheDocument()
+  })
+
+  it('renders a MermaidDiagram from a ```mermaid fence and lazy-loads the library', async () => {
+    const content = [
+      'A simple flowchart:',
+      '',
+      '```mermaid',
+      'flowchart TD',
+      '  A[Start] --> B[End]',
+      '```',
+    ].join('\n')
+
+    render(<ChatMessage role="assistant" content={content} isStreaming={false} />)
+
+    await waitFor(() => {
+      expect(mockRender).toHaveBeenCalledTimes(1)
+    })
+    const [, source] = mockRender.mock.calls[0]!
+    expect(source).toContain('flowchart TD')
+    expect(source).toContain('A[Start] --> B[End]')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mermaid-svg')).toBeInTheDocument()
+    })
+  })
+
+  it('shows the "Generating diagram..." placeholder while streaming', () => {
+    const content = ['```mermaid', 'flowchart TD', '  A --> B', '```'].join('\n')
+    render(<ChatMessage role="assistant" content={content} isStreaming={true} />)
+    expect(screen.getByText(/generating diagram/i)).toBeInTheDocument()
+    expect(mockRender).not.toHaveBeenCalled()
   })
 
   it('appends a synthetic closing fence when streaming ends mid-fence', () => {

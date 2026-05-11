@@ -1,5 +1,6 @@
 import SolvedCard from './SolvedCard'
 import UnsolvedCard from './UnsolvedCard'
+import MermaidDiagram from './MermaidDiagram'
 
 export interface FenceDispatcherProps {
   /** Language token from the fence (without the `language-` prefix). */
@@ -89,7 +90,7 @@ function asString(v: unknown): string | null {
  * Languages we recognise: `solved`, `unsolved`, `mermaid` (Phase 3).
  * Anything else just renders as a plain fenced code block (caller decides).
  */
-export default function FenceDispatcher({ language, meta, body }: FenceDispatcherProps) {
+export default function FenceDispatcher({ language, meta, body, isStreaming }: FenceDispatcherProps) {
   if (language === 'solved') {
     const { meta: m, body: rest } = parseMeta(body, meta)
     return (
@@ -111,7 +112,9 @@ export default function FenceDispatcher({ language, meta, body }: FenceDispatche
       />
     )
   }
-  // Phase 3 will add `mermaid`. For now anything unrecognised falls back to
-  // a plain code block via the caller.
+  if (language === 'mermaid') {
+    return <MermaidDiagram source={body} isStreaming={isStreaming} />
+  }
+  // Anything unrecognised: caller falls back to a plain code block.
   return null
 }
