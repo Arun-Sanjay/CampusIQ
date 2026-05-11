@@ -58,6 +58,7 @@ EVENT_LABELS: dict[XPEventType, str] = {
     XPEventType.SKILL_UNLOCKED: "Unlocked a skill",
     XPEventType.DAILY_LOGIN: "Daily login bonus",
     XPEventType.BADGE_EARNED: "Earned a badge",
+    XPEventType.CODING_PROBLEM_SOLVED: "Solved a coding problem",
 }
 
 
