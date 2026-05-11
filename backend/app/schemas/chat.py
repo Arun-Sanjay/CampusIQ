@@ -15,6 +15,8 @@ ChatTypeLiteral = Literal[
     "admin_knowledge",
 ]
 MessageRoleLiteral = Literal["user", "assistant", "system"]
+# Note Assistant response modes — picked per-message by the student.
+NoteAssistantModeLiteral = Literal["explain", "diagram", "questions"]
 
 
 class SourceCitation(BaseModel):
@@ -36,6 +38,8 @@ class ChatMessageResponse(BaseModel):
     role: MessageRoleLiteral
     content: str
     source_citations: list[SourceCitation] | None = None
+    # Mode the assistant rendered in (None for legacy rows + non-note-assistant chats).
+    mode: NoteAssistantModeLiteral | None = None
     created_at: datetime
 
 
@@ -67,3 +71,5 @@ class ChatMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, max_length=8000)
     subject_id: uuid.UUID | None = None  # for ad-hoc subject scoping
     stream: bool = True
+    # Only meaningful for Note Assistant sessions; ignored elsewhere.
+    mode: NoteAssistantModeLiteral | None = "explain"

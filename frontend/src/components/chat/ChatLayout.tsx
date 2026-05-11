@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { clsx } from 'clsx'
 import ChatMessage from './ChatMessage'
 import ChatInput from './ChatInput'
+import type { AssistantMode } from '../../types'
 
 export interface ChatLayoutMessage {
   role: 'user' | 'assistant'
@@ -12,6 +13,8 @@ export interface ChatLayoutMessage {
   /** Optional content rendered directly below the message bubble — used by
    *  the Knowledge Editor chat to render an inline edit-proposal card. */
   footer?: ReactNode
+  /** Note Assistant mode the response was generated in (assistant rows only). */
+  mode?: AssistantMode | null
 }
 
 export interface ChatLayoutProps {
@@ -23,6 +26,8 @@ export interface ChatLayoutProps {
   rightPanel?: ReactNode
   suggestedQuestions?: string[]
   className?: string
+  /** Rendered above the input (e.g. a mode selector). */
+  inputAccessory?: ReactNode
 }
 
 export default function ChatLayout({
@@ -34,6 +39,7 @@ export default function ChatLayout({
   rightPanel,
   suggestedQuestions,
   className,
+  inputAccessory,
 }: ChatLayoutProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -77,7 +83,12 @@ export default function ChatLayout({
         </div>
 
         <div className="border-t border-[var(--border-default)] pt-3">
-          <ChatInput onSend={onSend} placeholder={placeholder} disabled={disabled} />
+          <ChatInput
+            onSend={onSend}
+            placeholder={placeholder}
+            disabled={disabled}
+            topAccessory={inputAccessory}
+          />
         </div>
       </div>
 

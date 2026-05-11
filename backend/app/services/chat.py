@@ -87,6 +87,7 @@ def add_message(
     content: str,
     *,
     source_citations: list[dict] | None = None,
+    assistant_meta: dict | None = None,
 ) -> ChatMessage:
     """Append a message to a session and bump `last_message_at`."""
     message = ChatMessage(
@@ -94,6 +95,7 @@ def add_message(
         role=role,
         content=content,
         source_citations=source_citations,
+        assistant_meta=assistant_meta,
     )
     db.add(message)
     session.last_message_at = datetime.now(timezone.utc)

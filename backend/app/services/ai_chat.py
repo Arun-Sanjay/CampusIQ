@@ -33,20 +33,142 @@ logger = logging.getLogger(__name__)
 TOP_K = 5
 MAX_CHUNK_CHARS = 1500          # truncate any single chunk to keep prompt sane
 MAX_HISTORY_MESSAGES = 8         # last N turns of conversation to keep
-MAX_TOKENS = 1024                # cap on Claude's response length
+MAX_TOKENS = 1024                # default cap on Claude's response length
+QUESTIONS_MODE_MAX_TOKENS = 1500  # solved problems with steps need more headroom
 
 
-NOTE_ASSISTANT_SYSTEM = """You are CampusIQ Note Assistant — an AI tutor that helps engineering students understand their course material.
+# Shared header for all three Note Assistant modes — keeps the grounding +
+# behavior rules consistent and lets each mode-specific tail focus only on
+# response shape.
+NOTE_ASSISTANT_HEADER = """You are CampusIQ Note Assistant — an AI tutor that helps engineering students understand their course material.
 
 You are given the most relevant excerpts from the student's own course documents below as CONTEXT. Use them to answer the student's question.
 
-Guidelines:
-- Ground every claim in the provided context. If the answer isn't in the context, say so honestly and offer to help the student find it elsewhere.
+CRITICAL OUTPUT FORMAT RULES:
+- Ground every claim in the provided context. If the answer isn't in the context, say so honestly.
 - Use clear, conversational language — like a friendly senior explaining a topic.
-- Format answers in short paragraphs and bulleted lists when helpful.
-- DO NOT invent facts that aren't supported by the context.
-- DO NOT mention the word "context" or "excerpts" in your answer — just answer naturally.
-- When a concept appears in multiple chunks, synthesize them into a single coherent explanation."""
+- DO NOT mention "context" or "excerpts" — answer naturally.
+- DO NOT invent facts that aren't in the context."""
+
+
+EXPLAIN_MODE_TAIL = """RESPONSE STYLE — EXPLANATION:
+- Lead with a one-sentence direct answer.
+- Then expand in 2-4 short paragraphs, building intuition before formalism.
+- Use H3 (###) for subsections only when the topic genuinely has 2+ subtopics.
+- Use a bulleted list when (and only when) you have 3+ parallel items.
+- Use inline code (`like_this`) for identifiers; fenced code blocks only for runnable snippets.
+- DO NOT use any of these special fenced blocks: ```solved, ```unsolved, ```answer, ```mermaid. Those are for other modes.
+- Aim for 150-400 words. Resist longer; cut hedging."""
+
+
+DIAGRAM_MODE_TAIL = """RESPONSE STYLE — DIAGRAM + EXPLANATION:
+
+You MUST produce exactly one Mermaid diagram followed by a short explanation.
+
+OUTPUT TEMPLATE (follow exactly):
+
+  <one-sentence intro: what the diagram shows>
+
+  ```mermaid
+  <valid Mermaid syntax — see DIAGRAM TYPES below>
+  ```
+
+  ### How to read this
+  <2-3 short paragraphs walking through the diagram>
+
+DIAGRAM TYPES — pick the one that fits the question:
+- Flowchart (default for processes/algorithms): `flowchart TD` with `A[Step]`, `B{Decision}`, `A --> B`.
+- Sequence diagram (for protocols/interactions): `sequenceDiagram` with `Alice->>Bob: msg`.
+- State machine (for state-driven systems): `stateDiagram-v2` with `[*] --> S1` and `S1 --> S2 : event`.
+- Class/ER (for data models): `classDiagram` or `erDiagram`.
+- Graph (for graph algorithms / trees): `graph LR` with edges.
+
+MERMAID RULES (strict — diagrams that violate these will fail to render):
+- Always start with the diagram-type keyword on its own line.
+- Node IDs must be alphanumeric; labels go in `[]` or `{}` or `()`.
+- No HTML inside labels; escape special chars (`#35;` for `#`).
+- Keep diagrams under 25 nodes — split into multiple if larger.
+- DO NOT include the word "mermaid" inside the diagram itself.
+
+If the question doesn't naturally lend itself to a visual, produce a tiny conceptual flowchart of "Topic -> Key Idea 1 / Key Idea 2 / Key Idea 3"."""
+
+
+QUESTIONS_MODE_TAIL = """RESPONSE STYLE — PRACTICE PROBLEMS:
+
+Parse the student's request to determine:
+- How many problems they want (default: 3 if unspecified).
+- Whether they want SOLVED, UNSOLVED, or BOTH (default: 2 solved + 1 unsolved).
+- The topic/concept to test on.
+
+OUTPUT FORMAT — produce one fenced block per problem, in order. The first line
+inside each fence is a single-line JSON object with metadata; the rest is the
+problem body.
+
+For a SOLVED problem:
+  ```solved
+  {"index": 1, "problem": "<one-line problem statement>"}
+  STEP 1 — <TITLE IN CAPS, e.g. "CHARACTERISTIC EQUATION">
+  <body — math, derivation, plain prose>
+
+  STEP 2 — <title>
+  <body>
+
+  STEP N — <title>
+  <body>
+
+  ANSWER
+  <final boxed result, e.g. "x = 5">
+  ```
+
+For an UNSOLVED practice problem:
+  ```unsolved
+  {"index": 1, "problem": "<one-line problem statement>", "hint": "<one-line hint, hidden by default>"}
+  <2-3 sentence intro: why this matters, what concept it tests>
+
+  Steps to try:
+  1. <hint at first step>
+  2. <hint at second step>
+  3. <hint at third step>
+  ```
+
+STRICT RULES:
+- One fenced block per problem. Do not combine.
+- The first line inside the fence MUST be a single-line valid JSON object with the
+  fields shown above. No trailing comments. No multi-line JSON.
+- Use STEP N — TITLE (uppercase, em-dash) headers inside solved problems — the
+  renderer styles these specially.
+- The ANSWER block must come last inside a solved problem.
+- For unsolved problems, the `hint` field is hidden until the student clicks
+  "Show hint" — keep it to one line.
+- Between fenced blocks, put one blank line. No prose between blocks.
+- Open with one short sentence (e.g. "Here are 3 problems on Dijkstra — 2 solved,
+  1 for you to try.") then the fenced blocks.
+- Do NOT nest fenced code blocks inside a solved/unsolved fence. If you need to
+  show code, indent it 4 spaces instead.
+
+If the student's request can't be parsed, ask one clarifying question instead of
+producing problems."""
+
+
+# Pre-composed full prompts so we don't re-concat on every request.
+EXPLAIN_MODE_SYSTEM = f"{NOTE_ASSISTANT_HEADER}\n\n{EXPLAIN_MODE_TAIL}"
+DIAGRAM_MODE_SYSTEM = f"{NOTE_ASSISTANT_HEADER}\n\n{DIAGRAM_MODE_TAIL}"
+QUESTIONS_MODE_SYSTEM = f"{NOTE_ASSISTANT_HEADER}\n\n{QUESTIONS_MODE_TAIL}"
+
+# Backwards-compat alias — older code paths may still import the original constant.
+NOTE_ASSISTANT_SYSTEM = EXPLAIN_MODE_SYSTEM
+
+
+def _select_note_assistant_system_prompt(mode: str | None) -> tuple[str, int]:
+    """Pick the system prompt + max-tokens budget for the requested Note Assistant mode.
+
+    Unknown / missing modes fall back to Explain (the default behavior).
+    """
+    if mode == "diagram":
+        return DIAGRAM_MODE_SYSTEM, MAX_TOKENS
+    if mode == "questions":
+        return QUESTIONS_MODE_SYSTEM, QUESTIONS_MODE_MAX_TOKENS
+    return EXPLAIN_MODE_SYSTEM, MAX_TOKENS
 
 
 COLLEGE_GPT_SYSTEM = """You are CollegeGPT — an AI assistant that answers questions about a student's college using its OFFICIAL DOCUMENTS (handbooks, timetables, placement records, faculty lists, hostel rules).
@@ -203,6 +325,7 @@ def stream_rag_response(
     session: ChatSession,
     user_message_text: str,
     subject_id: uuid.UUID | None = None,
+    mode: str | None = None,
 ) -> Iterator[str]:
     """Generator that:
     1. Retrieves chunks (note-assistant or college-gpt depending on session.chat_type)
@@ -210,11 +333,15 @@ def stream_rag_response(
     3. Yields the assistant's response as text deltas
     4. Persists the assistant message + citations after the stream is exhausted
 
+    `mode` is only meaningful for Note Assistant sessions and selects which
+    system-prompt variant the LLM gets. Non-Note-Assistant sessions ignore it.
+
     The caller (route handler) wraps this in a StreamingResponse.
     """
     is_college_gpt = session.chat_type == ChatType.COLLEGE_GPT
     is_placement_chatbot = session.chat_type == ChatType.PLACEMENT_CHATBOT
     is_admin_knowledge = session.chat_type == ChatType.ADMIN_KNOWLEDGE
+    is_note_assistant = session.chat_type == ChatType.NOTE_ASSISTANT
 
     if is_admin_knowledge and user.role != UserRole.ADMIN:
         raise HTTPException(
@@ -272,6 +399,7 @@ def stream_rag_response(
             f"{context_block}\n\n"
             f"=== END OF EXCERPTS ==="
         )
+        max_tokens = MAX_TOKENS
     elif is_admin_knowledge:
         system_prompt = (
             f"{ADMIN_KNOWLEDGE_SYSTEM}\n\n"
@@ -279,6 +407,7 @@ def stream_rag_response(
             f"{context_block}\n\n"
             f"=== END OF CHUNKS ==="
         )
+        max_tokens = MAX_TOKENS
     elif is_college_gpt:
         system_prompt = (
             f"{COLLEGE_GPT_SYSTEM}\n\n"
@@ -286,9 +415,12 @@ def stream_rag_response(
             f"{context_block}\n\n"
             f"=== END OF MATERIAL ==="
         )
+        max_tokens = MAX_TOKENS
     else:
+        # Note Assistant — pick the prompt variant for the requested mode.
+        base_prompt, max_tokens = _select_note_assistant_system_prompt(mode)
         system_prompt = (
-            f"{NOTE_ASSISTANT_SYSTEM}\n\n"
+            f"{base_prompt}\n\n"
             f"=== RELEVANT MATERIAL FROM THE STUDENT'S COURSE DOCUMENTS ===\n\n"
             f"{context_block}\n\n"
             f"=== END OF MATERIAL ==="
@@ -315,7 +447,7 @@ def stream_rag_response(
         for delta in claude_client.stream_completion(
             system=system_prompt,
             messages=messages_for_claude,
-            max_tokens=MAX_TOKENS,
+            max_tokens=max_tokens,
             temperature=0.4,
         ):
             full_text_parts.append(delta)
@@ -324,12 +456,15 @@ def stream_rag_response(
         # ── 5. Persist the assistant message even if the client disconnects ──
         full_text = "".join(full_text_parts).strip()
         if full_text:
+            # Stash the rendering mode so history re-renders use the right parser.
+            assistant_meta = {"mode": mode or "explain"} if is_note_assistant else None
             chat_service.add_message(
                 db,
                 session,
                 MessageRole.ASSISTANT,
                 full_text,
                 source_citations=citations,
+                assistant_meta=assistant_meta,
             )
 
 
@@ -348,6 +483,7 @@ def answer_question_blocking(
     session: ChatSession,
     user_message_text: str,
     subject_id: uuid.UUID | None = None,
+    mode: str | None = None,
 ) -> StreamedAnswer:
     """Non-streaming convenience wrapper. Used by tests + frontends that don't
     want to bother with chunked transfer encoding."""
@@ -358,6 +494,7 @@ def answer_question_blocking(
         session=session,
         user_message_text=user_message_text,
         subject_id=subject_id,
+        mode=mode,
     ):
         text_parts.append(delta)
 

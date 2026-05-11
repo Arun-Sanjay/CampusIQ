@@ -13,6 +13,7 @@ import type {
   Announcement,
   AnnouncementCreate,
   AnnouncementUpdate,
+  AssistantMode,
   AttemptHistoryRow,
   ChatMessage,
   ChatSession,
@@ -232,6 +233,8 @@ export interface StreamMessageOptions {
   sessionId: string
   content: string
   subjectId?: string
+  /** Note Assistant mode. Server ignores it for non-NA sessions. */
+  mode?: AssistantMode
   onChunk: (delta: string) => void
   signal?: AbortSignal
 }
@@ -250,7 +253,7 @@ export const chatApi = {
    * Stream a new message into an existing session. The Promise resolves once
    * the server is done streaming. Each text delta is delivered to `onChunk`.
    */
-  streamMessage: async ({ sessionId, content, subjectId, onChunk, signal }: StreamMessageOptions): Promise<void> => {
+  streamMessage: async ({ sessionId, content, subjectId, mode, onChunk, signal }: StreamMessageOptions): Promise<void> => {
     const token = useAuthStore.getState().token
     if (!token) throw new ApiError(401, 'Not authenticated', null)
 
@@ -260,7 +263,7 @@ export const chatApi = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ content, subject_id: subjectId, stream: true }),
+      body: JSON.stringify({ content, subject_id: subjectId, stream: true, mode }),
       signal,
     })
 
@@ -294,10 +297,11 @@ export const chatApi = {
   },
 
   // Non-streaming convenience for tests / simple flows
-  sendMessageBlocking: (sessionId: string, content: string, subjectId?: string) =>
+  sendMessageBlocking: (sessionId: string, content: string, subjectId?: string, mode?: AssistantMode) =>
     api.post<ChatMessage>(`/chat/sessions/${sessionId}/messages/blocking`, {
       content,
       subject_id: subjectId,
+      mode,
     }),
 }
 

@@ -1,134 +1,108 @@
+import { useMemo } from 'react'
 import { clsx } from 'clsx'
-import { Bot } from 'lucide-react'
+import { Bot, BookOpen, Network, ListChecks } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Components } from 'react-markdown'
 import Avatar from '../ui/Avatar'
+import { baseMarkdownComponents } from './markdownComponents'
+import FenceDispatcher from './cards/FenceDispatcher'
+import type { AssistantMode } from '../../types'
 
 export interface ChatMessageProps {
   role: 'user' | 'assistant'
   content: string
   sources?: string[]
   isStreaming?: boolean
+  /** Mode the response was rendered in. Shows a small pill above the bubble
+   *  on assistant messages. Only meaningful for Note Assistant chats. */
+  mode?: AssistantMode | null
 }
 
-// Markdown component overrides — small, opinionated, themed via CSS variables
-// so they look at home in both the light and dark themes. Keeps the rhythm of
-// Claude's web UI: tighter headings than default browser styles, code blocks
-// with their own surface, indented lists.
-const markdownComponents: Components = {
-  h1: ({ node: _n, ...props }) => (
-    <h1
-      className="text-lg font-bold mt-2 mb-1.5 text-[var(--text-primary)]"
-      {...props}
-    />
-  ),
-  h2: ({ node: _n, ...props }) => (
-    <h2
-      className="text-base font-bold mt-2 mb-1.5 text-[var(--text-primary)]"
-      {...props}
-    />
-  ),
-  h3: ({ node: _n, ...props }) => (
-    <h3
-      className="text-sm font-semibold mt-2 mb-1 text-[var(--text-primary)]"
-      {...props}
-    />
-  ),
-  h4: ({ node: _n, ...props }) => (
-    <h4
-      className="text-sm font-semibold mt-1.5 mb-1 text-[var(--text-primary)]"
-      {...props}
-    />
-  ),
-  p: ({ node: _n, ...props }) => (
-    <p className="my-1.5 leading-relaxed" {...props} />
-  ),
-  ul: ({ node: _n, ...props }) => (
-    <ul className="my-1.5 pl-5 list-disc space-y-1" {...props} />
-  ),
-  ol: ({ node: _n, ...props }) => (
-    <ol className="my-1.5 pl-5 list-decimal space-y-1" {...props} />
-  ),
-  li: ({ node: _n, ...props }) => (
-    <li className="leading-relaxed" {...props} />
-  ),
-  strong: ({ node: _n, ...props }) => (
-    <strong className="font-semibold text-[var(--text-primary)]" {...props} />
-  ),
-  em: ({ node: _n, ...props }) => <em className="italic" {...props} />,
-  a: ({ node: _n, ...props }) => (
-    <a
-      className="text-primary underline underline-offset-2 hover:opacity-80"
-      target="_blank"
-      rel="noopener noreferrer"
-      {...props}
-    />
-  ),
-  blockquote: ({ node: _n, ...props }) => (
-    <blockquote
-      className="border-l-2 border-[var(--border-strong)] pl-3 my-2 text-[var(--text-secondary)] italic"
-      {...props}
-    />
-  ),
-  hr: ({ node: _n, ...props }) => (
-    <hr className="my-3 border-[var(--border-default)]" {...props} />
-  ),
-  code: ({ node: _n, className, children, ...props }) => {
-    // react-markdown sends `inline=true` for spans inside paragraphs and
-    // omits it for fenced blocks. v9+ stopped exposing that prop directly,
-    // so we sniff for the language- class instead.
-    const isBlock = (className ?? '').startsWith('language-')
-    if (isBlock) {
+const MODE_PILL: Record<AssistantMode, { label: string; Icon: LucideIcon }> = {
+  explain: { label: 'Explain', Icon: BookOpen },
+  diagram: { label: 'Diagram', Icon: Network },
+  questions: { label: 'Questions', Icon: ListChecks },
+}
+
+// Languages we route into card components instead of rendering as plain code.
+const CARD_LANGUAGES = new Set(['solved', 'unsolved', 'mermaid'])
+
+/**
+ * Append a synthetic closing fence if the streaming text ended mid-fence
+ * (e.g. Claude hit max_tokens before producing the trailing ```). Otherwise
+ * react-markdown swallows the entire tail as one runaway code block.
+ */
+function balanceFences(content: string, isStreaming: boolean): string {
+  if (isStreaming) return content
+  const matches = content.match(/```/g)
+  const count = matches ? matches.length : 0
+  if (count % 2 === 1) return content + '\n```'
+  return content
+}
+
+// Build the assistant-side markdown components: shared base + a code override
+// that dispatches recognised fence languages to the FenceDispatcher.
+function buildAssistantComponents(isStreaming: boolean): Components {
+  return {
+    ...baseMarkdownComponents,
+    code: ({ node, className, children, ...props }) => {
+      const lang = (className ?? '').replace(/^language-/, '')
+      if (lang && CARD_LANGUAGES.has(lang)) {
+        const body = String(children ?? '').replace(/\n$/, '')
+        // react-markdown exposes the post-language info-string at node.data.meta.
+        const meta =
+          (node as unknown as { data?: { meta?: string } } | undefined)?.data?.meta ??
+          undefined
+        const dispatched = (
+          <FenceDispatcher
+            language={lang}
+            meta={meta}
+            body={body}
+            isStreaming={isStreaming}
+          />
+        )
+        if (dispatched) return dispatched
+      }
+      // Fall through to ordinary code rendering (mirrors baseMarkdownComponents.code).
+      const isBlock = (className ?? '').startsWith('language-')
+      if (isBlock) {
+        return (
+          <code
+            className={clsx(
+              'block whitespace-pre overflow-x-auto rounded-md px-3 py-2 my-2 text-[12.5px] font-mono',
+              'bg-[var(--bg-tertiary)] border border-[var(--border-default)] text-[var(--text-primary)]',
+            )}
+            {...props}
+          >
+            {children}
+          </code>
+        )
+      }
       return (
         <code
-          className={clsx(
-            'block whitespace-pre overflow-x-auto rounded-md px-3 py-2 my-2 text-[12.5px] font-mono',
-            'bg-[var(--bg-tertiary)] border border-[var(--border-default)] text-[var(--text-primary)]',
-          )}
+          className="px-1 py-0.5 rounded text-[12.5px] font-mono bg-[var(--bg-tertiary)] border border-[var(--border-default)] text-[var(--text-primary)]"
           {...props}
         >
           {children}
         </code>
       )
-    }
-    return (
-      <code
-        className="px-1 py-0.5 rounded text-[12.5px] font-mono bg-[var(--bg-tertiary)] border border-[var(--border-default)] text-[var(--text-primary)]"
-        {...props}
-      >
-        {children}
-      </code>
-    )
-  },
-  pre: ({ node: _n, children, ...props }) => (
-    // The code block's <code> already renders its own surface; we only need
-    // <pre> to wipe browser defaults and prevent double-padding.
-    <pre className="my-2 not-prose" {...props}>
-      {children}
-    </pre>
-  ),
-  table: ({ node: _n, ...props }) => (
-    <div className="my-2 overflow-x-auto">
-      <table
-        className="w-full text-[12.5px] border-collapse border border-[var(--border-default)]"
-        {...props}
-      />
-    </div>
-  ),
-  th: ({ node: _n, ...props }) => (
-    <th
-      className="text-left font-semibold px-2 py-1 border border-[var(--border-default)] bg-[var(--bg-tertiary)]"
-      {...props}
-    />
-  ),
-  td: ({ node: _n, ...props }) => (
-    <td className="px-2 py-1 border border-[var(--border-default)]" {...props} />
-  ),
+    },
+  }
 }
 
-export default function ChatMessage({ role, content, sources, isStreaming }: ChatMessageProps) {
+export default function ChatMessage({ role, content, sources, isStreaming, mode }: ChatMessageProps) {
   const isUser = role === 'user'
+  const pill = !isUser && mode && MODE_PILL[mode] ? MODE_PILL[mode] : null
+  const assistantComponents = useMemo(
+    () => buildAssistantComponents(Boolean(isStreaming)),
+    [isStreaming],
+  )
+  const balanced = useMemo(
+    () => balanceFences(content, Boolean(isStreaming)),
+    [content, isStreaming],
+  )
 
   return (
     <div className={clsx('flex gap-3', isUser && 'flex-row-reverse')}>
@@ -141,6 +115,12 @@ export default function ChatMessage({ role, content, sources, isStreaming }: Cha
       )}
 
       <div className={clsx('max-w-[75%] space-y-2', isUser && 'items-end')}>
+        {pill && (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] uppercase tracking-wider rounded bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] border border-[var(--border-subtle)]">
+            <pill.Icon className="h-3 w-3" />
+            {pill.label}
+          </span>
+        )}
         <div
           className={clsx(
             'rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
@@ -153,8 +133,8 @@ export default function ChatMessage({ role, content, sources, isStreaming }: Cha
             content
           ) : (
             <>
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                {content}
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={assistantComponents}>
+                {balanced}
               </ReactMarkdown>
               {/* Trim the awkward extra margin react-markdown leaves on the
                   very first/last children inside the bubble. */}
