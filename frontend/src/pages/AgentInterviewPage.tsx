@@ -1,6 +1,7 @@
-import { createElement, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useConversation } from '@elevenlabs/react'
 import {
   ArrowLeft,
   Bot,
@@ -8,7 +9,9 @@ import {
   ChevronUp,
   ExternalLink,
   Headphones,
+  Loader2,
   Mic,
+  PhoneOff,
   RefreshCw,
   Sparkles,
   User,
@@ -22,7 +25,6 @@ import {
   type ConversationListItem,
 } from '../api/elevenlabs'
 
-const WIDGET_SRC = 'https://elevenlabs.io/convai-widget/index.js'
 const POLL_INTERVAL_MS = 8_000
 
 const rounds = [
@@ -50,6 +52,226 @@ function statusBadge(status: string, callSuccessful?: string | null): { label: s
   }
   return { label: norm || 'Unknown', bg: 'rgba(100, 116, 139, 0.18)', color: 'var(--text-secondary)' }
 }
+
+// ═════════════════════════════════════════════════════════════════
+// Call controls — uses @elevenlabs/react useConversation hook
+// ═════════════════════════════════════════════════════════════════
+
+interface CallControlsProps {
+  onCallEnded: () => void
+}
+
+function CallControls({ onCallEnded }: CallControlsProps) {
+  const [error, setError] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
+
+  const conversation = useConversation({
+    onConnect: () => setError(null),
+    onDisconnect: () => {
+      // Trigger an immediate refresh of past interviews after a call ends
+      onCallEnded()
+    },
+    onError: (e) => {
+      setError(typeof e === 'string' ? e : 'Connection error — try again')
+    },
+  })
+
+  const status = conversation.status as
+    | 'disconnected'
+    | 'connecting'
+    | 'connected'
+    | 'disconnecting'
+
+  const isIdle = status === 'disconnected'
+  const isConnecting = status === 'connecting' || starting
+  const isLive = status === 'connected'
+  const isAgentSpeaking = isLive && conversation.isSpeaking
+  const isListening = isLive && !conversation.isSpeaking
+
+  const handleStart = useCallback(async () => {
+    setError(null)
+    setStarting(true)
+    try {
+      // Pre-request mic so the prompt isn't buried inside the SDK call
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+      await conversation.startSession({ agentId: AGENT_ID, connectionType: 'websocket' })
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message.includes('Permission')
+            ? 'Microphone permission denied — allow access in your browser to continue.'
+            : e.message
+          : 'Could not start the interview',
+      )
+    } finally {
+      setStarting(false)
+    }
+  }, [conversation])
+
+  const handleEnd = useCallback(async () => {
+    try {
+      await conversation.endSession()
+    } catch {
+      // already disconnected
+    }
+  }, [conversation])
+
+  // ── Idle state ─────────────────────────────────────────────────
+  if (isIdle && !isConnecting) {
+    return (
+      <div className="flex flex-col items-center justify-center w-full">
+        <motion.button
+          type="button"
+          onClick={() => void handleStart()}
+          className="group relative inline-flex items-center gap-3 px-8 py-4 rounded-full font-semibold text-base text-white shadow-lg transition-transform"
+          style={{
+            background: 'linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)',
+            boxShadow: '0 10px 30px -10px rgba(124, 58, 237, 0.5)',
+          }}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <Mic className="h-5 w-5" />
+          Start Interview
+        </motion.button>
+        <p
+          className="text-xs mt-4 text-center"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          Click to begin. You'll be asked for microphone access.
+        </p>
+        {error && (
+          <div
+            className="mt-4 rounded-lg px-3 py-2 text-sm text-center max-w-sm"
+            style={{
+              background: 'rgba(220, 38, 38, 0.08)',
+              border: '1px solid rgba(220, 38, 38, 0.25)',
+              color: '#DC2626',
+            }}
+          >
+            {error}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Connecting state ───────────────────────────────────────────
+  if (isConnecting) {
+    return (
+      <div className="flex flex-col items-center justify-center w-full">
+        <div
+          className="w-24 h-24 rounded-full flex items-center justify-center"
+          style={{
+            background: 'rgba(124, 58, 237, 0.12)',
+            border: '2px solid rgba(124, 58, 237, 0.3)',
+          }}
+        >
+          <Loader2 className="h-10 w-10 animate-spin" style={{ color: '#7C3AED' }} />
+        </div>
+        <p
+          className="text-sm mt-5 font-medium"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          Connecting to your interviewer…
+        </p>
+      </div>
+    )
+  }
+
+  // ── Live call state ────────────────────────────────────────────
+  return (
+    <div className="flex flex-col items-center justify-center w-full">
+      <div className="relative w-32 h-32 flex items-center justify-center mb-4">
+        {/* Pulsing rings while agent speaks */}
+        {isAgentSpeaking && (
+          <>
+            <motion.div
+              className="absolute inset-0 rounded-full"
+              style={{ background: 'rgba(124, 58, 237, 0.35)' }}
+              animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut' }}
+            />
+            <motion.div
+              className="absolute inset-0 rounded-full"
+              style={{ background: 'rgba(124, 58, 237, 0.25)' }}
+              animate={{ scale: [1, 1.8, 1], opacity: [0.4, 0, 0.4] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeOut', delay: 0.4 }}
+            />
+          </>
+        )}
+        {/* Listening pulse */}
+        {isListening && (
+          <motion.div
+            className="absolute inset-0 rounded-full"
+            style={{ background: 'rgba(46, 160, 67, 0.25)' }}
+            animate={{ scale: [1, 1.2, 1], opacity: [0.4, 0.1, 0.4] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+          />
+        )}
+        {/* Core orb */}
+        <div
+          className="relative w-24 h-24 rounded-full flex items-center justify-center"
+          style={{
+            background: isAgentSpeaking
+              ? 'linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)'
+              : 'linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(91, 33, 182, 0.12) 100%)',
+            border: isAgentSpeaking
+              ? '2px solid rgba(255, 255, 255, 0.2)'
+              : '2px solid rgba(124, 58, 237, 0.3)',
+            boxShadow: isAgentSpeaking ? '0 0 40px rgba(124, 58, 237, 0.5)' : 'none',
+            transition: 'all 0.3s ease',
+          }}
+        >
+          {isAgentSpeaking ? (
+            <Bot className="h-10 w-10 text-white" />
+          ) : (
+            <Mic className="h-10 w-10" style={{ color: '#7C3AED' }} />
+          )}
+        </div>
+      </div>
+
+      <div className="text-center mb-5">
+        <p
+          className="text-sm font-medium"
+          style={{ color: 'var(--text-primary)' }}
+        >
+          {isAgentSpeaking ? 'Adam is speaking…' : 'Listening — your turn'}
+        </p>
+        <p
+          className="text-xs mt-1"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          {isAgentSpeaking
+            ? 'You can interrupt at any time'
+            : 'Speak naturally — pause when done'}
+        </p>
+      </div>
+
+      <motion.button
+        type="button"
+        onClick={() => void handleEnd()}
+        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium transition-colors"
+        style={{
+          background: 'rgba(220, 38, 38, 0.1)',
+          border: '1px solid rgba(220, 38, 38, 0.3)',
+          color: '#DC2626',
+        }}
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.97 }}
+      >
+        <PhoneOff className="h-4 w-4" />
+        End Interview
+      </motion.button>
+    </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════
+// Transcript card — shown when a past interview row is expanded
+// ═════════════════════════════════════════════════════════════════
 
 interface TranscriptCardProps {
   conversation: ConversationListItem
@@ -172,6 +394,10 @@ function TranscriptCard({ conversation, detail, loading, error }: TranscriptCard
   )
 }
 
+// ═════════════════════════════════════════════════════════════════
+// Page
+// ═════════════════════════════════════════════════════════════════
+
 export default function AgentInterviewPage() {
   const [conversations, setConversations] = useState<ConversationListItem[]>([])
   const [listLoading, setListLoading] = useState(true)
@@ -181,16 +407,6 @@ export default function AgentInterviewPage() {
   const [detailLoading, setDetailLoading] = useState<Record<string, boolean>>({})
   const [detailError, setDetailError] = useState<Record<string, string>>({})
   const pollRef = useRef<number | null>(null)
-
-  // Inject the widget script once
-  useEffect(() => {
-    if (document.querySelector(`script[src="${WIDGET_SRC}"]`)) return
-    const script = document.createElement('script')
-    script.src = WIDGET_SRC
-    script.async = true
-    script.type = 'text/javascript'
-    document.body.appendChild(script)
-  }, [])
 
   const fetchList = useCallback(async () => {
     try {
@@ -211,6 +427,12 @@ export default function AgentInterviewPage() {
     return () => {
       if (pollRef.current != null) window.clearInterval(pollRef.current)
     }
+  }, [fetchList])
+
+  // After a call ends, give ElevenLabs a moment to finalize then refresh.
+  const handleCallEnded = useCallback(() => {
+    window.setTimeout(() => void fetchList(), 1_500)
+    window.setTimeout(() => void fetchList(), 5_000)
   }, [fetchList])
 
   const loadDetail = useCallback(
@@ -309,28 +531,18 @@ export default function AgentInterviewPage() {
             </p>
           </div>
 
-          {/* Widget + side panel */}
+          {/* Call panel + side panel */}
           <div className="grid md:grid-cols-[1.2fr_1fr] gap-5 mb-10">
-            {/* Widget container */}
+            {/* Call container */}
             <div
-              className="rounded-2xl p-8 flex flex-col items-center justify-center min-h-[320px]"
+              className="rounded-2xl p-10 flex items-center justify-center min-h-[360px]"
               style={{
                 background: 'var(--bg-elevated)',
                 border: '1px solid var(--border-default)',
                 boxShadow: 'var(--shadow-elevated)',
               }}
             >
-              {createElement('elevenlabs-convai', { 'agent-id': AGENT_ID })}
-              <div
-                className="flex items-center gap-2 text-xs mt-6"
-                style={{ color: 'var(--text-tertiary)' }}
-              >
-                <span
-                  className="inline-block w-1.5 h-1.5 rounded-full"
-                  style={{ background: '#2EA043' }}
-                />
-                Voice: Adam · ElevenLabs Turbo v2
-              </div>
+              <CallControls onCallEnded={handleCallEnded} />
             </div>
 
             {/* Side panel — pre-flight + structure */}
