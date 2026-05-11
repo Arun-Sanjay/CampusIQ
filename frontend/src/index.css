@@ -67,7 +67,58 @@
     --theme-mode: dark;
   }
 
-  /* premium / aurora / luxury theme blocks removed — see useTheme.ts */
+  /* ═══════ NEBULA ═══════
+     The signature theme. Mirrors the landing-page tokens in
+     pages/marketing/landing.css so an authenticated student feels like
+     they walked straight in from the marketing surface — same dark
+     navy base, same violet+cyan accent system. */
+  .nebula {
+    color-scheme: dark;
+    --bg-primary: #06070A;
+    --bg-secondary: #0B0D11;
+    --bg-tertiary: #0F1116;
+    --bg-elevated: #15181E;
+    --bg-sidebar: #08090E;
+    --sidebar-text: #9094A0;
+    --sidebar-text-active: #ECECEE;
+    --sidebar-border: rgba(167, 139, 250, 0.10);
+    --sidebar-hover: rgba(167, 139, 250, 0.05);
+    --sidebar-active: rgba(167, 139, 250, 0.10);
+    --border-default: rgba(255, 255, 255, 0.07);
+    --border-subtle: rgba(255, 255, 255, 0.04);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text-primary: #ECECEE;
+    --text-secondary: #9094A0;
+    --text-tertiary: #5C606A;
+    --text-inverted: #06070A;
+    --input-bg: rgba(255, 255, 255, 0.03);
+    --shadow-card: 0 6px 20px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04);
+    --shadow-card-hover: 0 10px 30px rgba(139, 92, 246, 0.18), 0 0 0 1px rgba(167, 139, 250, 0.18);
+    --shadow-elevated: 0 16px 48px rgba(139, 92, 246, 0.22);
+    --glass-bg: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glow-color: rgba(139, 92, 246, 0.22);
+    --gradient-accent: #A78BFA;
+    --theme-mode: nebula;
+  }
+
+  /* Soft ambient violet/cyan wash on the page background, matching the
+     landing-theme pseudo-element. Only applied in nebula mode. */
+  .nebula body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(ellipse 70% 50% at 50% -10%, rgba(139, 92, 246, 0.14), transparent 60%),
+      radial-gradient(ellipse 55% 40% at 90% 30%, rgba(34, 211, 238, 0.08), transparent 60%),
+      radial-gradient(ellipse 45% 35% at 10% 70%, rgba(167, 139, 250, 0.06), transparent 60%);
+  }
+  .nebula #root { position: relative; z-index: 1; }
+
+  /* Selection accent matches the violet hero gradient. */
+  .nebula ::selection { background: rgba(167, 139, 250, 0.25); }
 
   body {
     @apply min-h-screen antialiased;
