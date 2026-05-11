@@ -19,6 +19,11 @@ import Modal from '../../components/ui/Modal'
 import Select from '../../components/ui/Select'
 import Input from '../../components/ui/Input'
 import { ApiError, documentsApi, quizzesApi, subjectsApi } from '../../api/client'
+import { useNotificationStore } from '../../store/notificationStore'
+import {
+  useQuizGenerationStore,
+  type PendingQuizGen,
+} from '../../store/quizGenerationStore'
 import type {
   Difficulty,
   DocumentWithSubject,
@@ -69,7 +74,14 @@ export default function QuizManagementPage() {
   const [genDifficulty, setGenDifficulty] = useState<Difficulty>('medium')
   const [genNumQuestions, setGenNumQuestions] = useState(5)
   const [genTopic, setGenTopic] = useState('')
-  const [generating, setGenerating] = useState(false)
+
+  // Background jobs — each Generate click fires a request and pushes a
+  // job into the global store. The modal closes immediately so the
+  // teacher can navigate anywhere; the chip overlay (mounted in
+  // AppLayout) renders the running jobs and survives route changes.
+  const addPendingGen = useQuizGenerationStore((s) => s.add)
+  const removePendingGen = useQuizGenerationStore((s) => s.remove)
+  const pushToast = useNotificationStore((s) => s.push)
 
   // Review modal
   const [reviewQuiz, setReviewQuiz] = useState<QuizForTeacher | null>(null)
@@ -117,34 +129,72 @@ export default function QuizManagementPage() {
   const published = quizzes.filter((q) => q.is_published)
   const drafts = quizzes.filter((q) => !q.is_published && !q.is_ai_generated)
 
-  const handleGenerate = async () => {
+  const submitGenerate = () => {
     if (!genSubjectId) {
       setError('Pick a subject to generate from')
       return
     }
-    setGenerating(true)
-    setError(null)
-    try {
-      await quizzesApi.generate({
-        subject_id: genSubjectId,
-        document_id: genDocumentId || null,
-        difficulty: genDifficulty,
-        num_questions: genNumQuestions,
-        topic_hint: genTopic || null,
-      })
-      setGenerateOpen(false)
-      setGenTopic('')
-      await refresh()
-      setActiveTab('Pending Review')
-    } catch (err) {
-      setError(
-        err instanceof ApiError && typeof err.detail === 'string'
-          ? err.detail
-          : 'Quiz generation failed',
-      )
-    } finally {
-      setGenerating(false)
+    const subject = subjects.find((s) => s.id === genSubjectId)
+    if (!subject) {
+      setError('Subject not found')
+      return
     }
+
+    const job: PendingQuizGen = {
+      id:
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      startedAt: Date.now(),
+      subjectCode: subject.code,
+      subjectName: subject.name,
+      difficulty: genDifficulty,
+      numQuestions: genNumQuestions,
+      topic: genTopic.trim() || null,
+    }
+
+    const payload = {
+      subject_id: genSubjectId,
+      document_id: genDocumentId || null,
+      difficulty: genDifficulty,
+      num_questions: genNumQuestions,
+      topic_hint: job.topic,
+    }
+
+    // Optimistic UI: shut the modal immediately, drop the chip in the
+    // global store, free the teacher to do anything else while the AI
+    // cooks.
+    addPendingGen(job)
+    setGenerateOpen(false)
+    setGenTopic('')
+    setError(null)
+
+    void (async () => {
+      try {
+        await quizzesApi.generate(payload)
+        await refresh()
+        setActiveTab('Pending Review')
+        pushToast({
+          id: `quiz-gen-ok-${job.id}`,
+          type: 'quiz_result',
+          title: 'Quiz ready for review',
+          content: `${job.subjectCode} · ${job.difficulty} · ${job.numQuestions} questions`,
+        })
+      } catch (err) {
+        const detail =
+          err instanceof ApiError && typeof err.detail === 'string'
+            ? err.detail
+            : 'Quiz generation failed. Try again or pick a different document.'
+        pushToast({
+          id: `quiz-gen-fail-${job.id}`,
+          type: 'system',
+          title: `Couldn't generate ${job.subjectCode} quiz`,
+          content: detail,
+        })
+      } finally {
+        removePendingGen(job.id)
+      }
+    })()
   }
 
   const openReview = async (id: string) => {
@@ -409,22 +459,17 @@ export default function QuizManagementPage() {
             onChange={(e) => setGenTopic(e.target.value)}
           />
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setGenerateOpen(false)} disabled={generating}>
+          <p className="text-[11px] text-[var(--text-tertiary)] leading-snug">
+            The AI keeps cooking in the background — close this and keep working;
+            you'll get a toast the moment it lands in Pending Review.
+          </p>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" onClick={() => setGenerateOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={() => void handleGenerate()} disabled={generating || !genSubjectId}>
-              {generating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  Generating…
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-1" />
-                  Generate
-                </>
-              )}
+            <Button onClick={submitGenerate} disabled={!genSubjectId} icon={Sparkles}>
+              Generate
             </Button>
           </div>
         </div>
@@ -436,13 +481,31 @@ export default function QuizManagementPage() {
         onClose={() => setReviewQuiz(null)}
         title={reviewQuiz?.title ?? 'Quiz preview'}
         size="xl"
+        footer={
+          reviewQuiz && !reviewLoading ? (
+            <div className="flex justify-between gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => void handleDelete(reviewQuiz.id)}
+                icon={Trash2}
+              >
+                Delete
+              </Button>
+              <Button
+                onClick={() => void handlePublishToggle(reviewQuiz.id, reviewQuiz.is_published)}
+              >
+                {reviewQuiz.is_published ? 'Unpublish' : 'Publish to students'}
+              </Button>
+            </div>
+          ) : null
+        }
       >
         {reviewLoading || !reviewQuiz ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-[var(--text-tertiary)]" />
           </div>
         ) : (
-          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+          <div className="space-y-4">
             <div className="flex items-center gap-2 text-xs text-[var(--text-tertiary)]">
               <Badge variant="info" size="sm">{reviewQuiz.difficulty}</Badge>
               <span>{reviewQuiz.question_count} questions</span>
@@ -479,21 +542,6 @@ export default function QuizManagementPage() {
                 )}
               </Card>
             ))}
-
-            <div className="flex justify-between gap-2 pt-2 sticky bottom-0 bg-[var(--bg-elevated)] py-2">
-              <Button
-                variant="secondary"
-                onClick={() => void handleDelete(reviewQuiz.id)}
-                icon={Trash2}
-              >
-                Delete
-              </Button>
-              <Button
-                onClick={() => void handlePublishToggle(reviewQuiz.id, reviewQuiz.is_published)}
-              >
-                {reviewQuiz.is_published ? 'Unpublish' : 'Publish to students'}
-              </Button>
-            </div>
           </div>
         )}
       </Modal>

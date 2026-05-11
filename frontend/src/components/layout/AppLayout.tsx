@@ -7,6 +7,7 @@ import TopBar from './TopBar'
 import GradientMesh from './GradientMesh'
 import PageTransition from './PageTransition'
 import NotificationToasts from './NotificationToasts'
+import QuizGenerationChips from './QuizGenerationChips'
 import ErrorBoundary from '../ErrorBoundary'
 import { useAuthStore } from '../../store/authStore'
 import { useNotificationsSocket } from '../../hooks/useNotificationsSocket'
@@ -113,6 +114,7 @@ export default function AppLayout() {
       </div>
 
       <NotificationToasts />
+      <QuizGenerationChips />
     </div>
   )
 }
