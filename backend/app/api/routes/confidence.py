@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import ClaudeRateLimited, CurrentUser, DbSession
 from app.models.gamification import XPEventType
 from app.models.placement import ConfidenceSession
 from app.models.user import UserRole
@@ -72,7 +72,7 @@ def _to_response(row: ConfidenceSession) -> ConfidenceSessionResponse:
 )
 async def create_session(
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: ClaudeRateLimited,
     audio: Annotated[UploadFile, File(description="Audio recording (webm/mp3/wav)")],
     prompt: Annotated[str, Form(..., min_length=1, max_length=600)],
     duration_seconds: Annotated[int, Form(..., ge=1, le=600)],

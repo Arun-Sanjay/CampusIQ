@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, status
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import ClaudeRateLimited, CurrentUser, DbSession
 from app.schemas.resume import (
     ATSScoreRequest,
     ATSScoreResponse,
@@ -77,7 +77,7 @@ def reset_resume_chat_history(
 def chat_with_coach(
     data: ResumeChatRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: ClaudeRateLimited,
 ) -> ResumeChatResponse:
     result = resume_builder.chat_step(db, current_user, data.message)
     return ResumeChatResponse(
@@ -95,7 +95,7 @@ def chat_with_coach(
 def score_against_jd(
     data: ATSScoreRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: ClaudeRateLimited,
 ) -> ATSScoreResponse:
     return resume_builder.score_against_jd(
         db, current_user, job_description=data.job_description

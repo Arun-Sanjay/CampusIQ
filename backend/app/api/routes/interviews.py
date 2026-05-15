@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import ClaudeRateLimited, CurrentUser, DbSession
 from app.models.placement import InterviewMode, InterviewPersona
 from app.schemas.mock_interview import (
     InterviewMessageRequest,
@@ -95,7 +95,7 @@ def submit_message(
     session_id: uuid.UUID,
     data: InterviewMessageRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: ClaudeRateLimited,
 ) -> InterviewTurnResponse:
     result = mock_interview.student_turn(db, current_user, session_id, data.content)
     return InterviewTurnResponse(
@@ -146,7 +146,7 @@ def voice_capabilities() -> VoiceCapabilitiesResponse:
 async def submit_voice_turn(
     session_id: uuid.UUID,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: ClaudeRateLimited,
     audio: Annotated[UploadFile, File(description="Candidate's spoken answer")],
     # Browser-side Web Speech API transcript — optional override so voice
     # interviews work without the server-side OPENAI_API_KEY being set.

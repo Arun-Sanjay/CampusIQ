@@ -5,7 +5,7 @@ import math
 
 from fastapi import APIRouter
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import ClaudeRateLimited, CurrentUser, DbSession
 from app.schemas.skills import (
     AdaptivePlanRequest,
     AdaptivePlanResponse,
@@ -109,7 +109,7 @@ def list_companies(
 def build_plan(
     data: AdaptivePlanRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: ClaudeRateLimited,
 ) -> AdaptivePlanResponse:
     plan = skill_graph_service.build_adaptive_plan(
         db,

@@ -5,7 +5,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import CurrentUser, DbSession, require_role
+from app.api.deps import ClaudeRateLimited, CurrentUser, DbSession, require_role
 from app.models.quiz import Difficulty
 from app.schemas.quiz import (
     AttemptHistoryRow,
@@ -99,7 +99,7 @@ def get_quiz(
 def generate_quiz(
     data: QuizGenerateRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: ClaudeRateLimited,
 ) -> QuizForTeacher:
     try:
         difficulty = Difficulty(data.difficulty)

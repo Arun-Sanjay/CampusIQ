@@ -1,6 +1,14 @@
-"""Reusable FastAPI dependencies: DB session, current user, role guards."""
+"""Reusable FastAPI dependencies: DB session, current user, role guards.
+
+Also home to the per-user Claude rate limiter (Phase 21 cost guardrail).
+A runaway loop in any AI endpoint should hit 429 long before it can
+chew through the demo's Anthropic credit.
+"""
 from __future__ import annotations
 
+import threading
+import time
+import uuid
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -8,6 +16,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.security import get_user_id_from_token
 from app.models.user import User, UserRole
@@ -85,3 +94,68 @@ def require_role(*allowed_roles: UserRole | str):
         return user
 
     return _checker
+
+
+# ── Per-user Claude rate limiter (Phase 21) ───────────────────────────
+# In-process token bucket keyed by user id. `claude_requests_per_minute`
+# from settings drives both the refill rate and the bucket capacity, so
+# a user can burst up to the rate in one second then waits ~3s between
+# subsequent calls. In-process state is fine for the single-instance
+# demo deploy; Redis would be needed for multi-replica enforcement, and
+# we're explicitly not introducing Redis on this project.
+
+_buckets: dict[uuid.UUID, dict] = {}
+_buckets_lock = threading.Lock()
+
+
+def _consume_claude_token(user_id: uuid.UUID) -> bool:
+    """Try to take 1 token from the user's bucket; return True on success.
+
+    The bucket refills continuously at `rate / 60` tokens per second up
+    to a cap of `rate` tokens.
+    """
+    settings = get_settings()
+    rate = max(1, settings.claude_requests_per_minute)
+    refill_per_second = rate / 60.0
+    now = time.monotonic()
+    with _buckets_lock:
+        bucket = _buckets.get(user_id)
+        if bucket is None:
+            # First call from this user — start at full capacity.
+            _buckets[user_id] = {"tokens": float(rate) - 1.0, "last_refill": now}
+            return True
+        elapsed = now - bucket["last_refill"]
+        bucket["tokens"] = min(float(rate), bucket["tokens"] + elapsed * refill_per_second)
+        bucket["last_refill"] = now
+        if bucket["tokens"] >= 1.0:
+            bucket["tokens"] -= 1.0
+            return True
+        return False
+
+
+def claude_rate_limit(user: CurrentUser) -> User:
+    """Dependency: 429s if this user has exhausted their Claude quota.
+
+    Wire on every endpoint that calls Claude — streaming chat, quiz
+    generation, adaptive plan, ATS scoring, mock-interview turns,
+    confidence analysis. Reading-only endpoints stay unbounded.
+    """
+    if not _consume_claude_token(user.id):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "AI request rate limit exceeded. Try again in a few seconds — "
+                "this guardrail protects the demo's API budget."
+            ),
+            headers={"Retry-After": "5"},
+        )
+    return user
+
+
+def _reset_claude_buckets_for_tests() -> None:
+    """Test-only helper: clear bucket state between tests."""
+    with _buckets_lock:
+        _buckets.clear()
+
+
+ClaudeRateLimited = Annotated[User, Depends(claude_rate_limit)]

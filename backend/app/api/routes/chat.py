@@ -6,7 +6,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import ClaudeRateLimited, CurrentUser, DbSession
 from app.models.chat import ChatType
 from app.models.user import UserRole
 from app.schemas.chat import (
@@ -156,7 +156,7 @@ def send_message(
     session_id: uuid.UUID,
     data: ChatMessageRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: ClaudeRateLimited,
 ):
     """Send a message to a chat session.
 
@@ -197,7 +197,7 @@ def send_message_blocking(
     session_id: uuid.UUID,
     data: ChatMessageRequest,
     db: DbSession,
-    current_user: CurrentUser,
+    current_user: ClaudeRateLimited,
 ) -> ChatMessageResponse:
     session = chat_service.get_session(db, session_id, current_user)
     effective_subject_id = data.subject_id or session.subject_id
