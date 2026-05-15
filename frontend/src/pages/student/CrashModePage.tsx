@@ -142,7 +142,11 @@ export default function CrashModePage() {
           }))
         : FALLBACK_TASKS
 
-      const result = await algorithmsApi.generateSchedule({ tasks, days: options.days })
+      const result = await algorithmsApi.generateSchedule({
+        tasks,
+        days: options.days,
+        strategy: 'backtracking',
+      })
       setSchedule(result)
 
       const next: PersistedState = {
