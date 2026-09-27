@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { clsx } from 'clsx'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
+import BottomTabBar from './BottomTabBar'
 import GradientMesh from './GradientMesh'
 import PageTransition from './PageTransition'
 import NotificationToasts from './NotificationToasts'
@@ -34,6 +35,7 @@ const pageTitles: Record<string, string> = {
   '/student/profile': 'My Profile',
   '/teacher': 'Dashboard',
   '/teacher/subjects': 'My Subjects',
+  '/teacher/roster': 'My Students',
   '/teacher/documents': 'Documents',
   '/teacher/quizzes': 'Quiz Management',
   '/teacher/announcements': 'Announcements',
@@ -57,10 +59,18 @@ function getRoleFromPath(pathname: string): Role {
 
 export default function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
   // Phase 9 — open the notifications WebSocket once we know who's logged in.
   useNotificationsSocket()
+
+  // Mobile nav drawer: auto-close on navigation, lock body scroll while open.
+  useEffect(() => { setMobileNavOpen(false) }, [location.pathname])
+  useEffect(() => {
+    document.body.style.overflow = mobileNavOpen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [mobileNavOpen])
   const role: Role = user?.role ?? getRoleFromPath(location.pathname)
   const title = pageTitles[location.pathname] || 'CampusIQ'
 
@@ -79,7 +89,7 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="min-h-screen relative" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div className="min-h-dvh relative" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {/* Premium gradient mesh background */}
       <GradientMesh />
 
@@ -87,13 +97,24 @@ export default function AppLayout() {
         role={role}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        mobileOpen={mobileNavOpen}
+        onMobileClose={() => setMobileNavOpen(false)}
         user={displayUser}
       />
 
+      {/* Mobile drawer backdrop */}
+      {mobileNavOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm fade-in"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       <div
         className={clsx(
-          'min-h-screen transition-all duration-300 flex flex-col relative z-10',
-          sidebarCollapsed ? 'ml-16' : 'ml-60',
+          'min-h-dvh transition-all duration-300 flex flex-col relative z-10',
+          'ml-0', sidebarCollapsed ? 'md:ml-16' : 'md:ml-60',
         )}
       >
         <TopBar
@@ -101,9 +122,10 @@ export default function AppLayout() {
           streak={role === 'student' ? stats.streak : undefined}
           level={role === 'student' ? stats.level : undefined}
           score={role === 'student' ? stats.score : undefined}
+          onMenuClick={() => setMobileNavOpen(true)}
         />
 
-        <main className="flex-1 p-6">
+        <main className="flex-1 p-4 sm:p-6 pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-6">
           <AnimatePresence mode="wait">
             <PageTransition key={location.pathname}>
               <ErrorBoundary scope={location.pathname}>
@@ -113,6 +135,8 @@ export default function AppLayout() {
           </AnimatePresence>
         </main>
       </div>
+
+      <BottomTabBar role={role} onMore={() => setMobileNavOpen(true)} />
 
       <NotificationToasts />
       <QuizGenerationChips />

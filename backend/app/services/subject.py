@@ -17,7 +17,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.quiz import Quiz
-from app.models.user import Document, Subject, User, UserRole
+from app.models.user import Document, Subject, SubjectCategory, User, UserRole
 from app.schemas.subject import SubjectCreate, SubjectResponse, SubjectUpdate
 
 
@@ -32,6 +32,15 @@ def _to_response(subject: Subject, *, document_count: int = 0, quiz_count: int =
         description=subject.description,
         semester=subject.semester,
         branch=subject.branch,
+        category=subject.category.value if subject.category else "theory",
+        credits=subject.credits,
+        cie_max=subject.cie_max,
+        see_max=subject.see_max,
+        has_lab_split=subject.has_lab_split,
+        cie_theory_max=subject.cie_theory_max,
+        cie_lab_max=subject.cie_lab_max,
+        see_theory_max=subject.see_theory_max,
+        see_lab_max=subject.see_lab_max,
         created_at=subject.created_at,
         document_count=document_count,
         quiz_count=quiz_count,
@@ -201,6 +210,15 @@ def create_subject(db: Session, data: SubjectCreate, user: User) -> SubjectRespo
         description=data.description,
         semester=data.semester,
         branch=data.branch,
+        category=SubjectCategory(data.category),
+        credits=data.credits,
+        cie_max=data.cie_max,
+        see_max=data.see_max,
+        has_lab_split=data.has_lab_split,
+        cie_theory_max=data.cie_theory_max,
+        cie_lab_max=data.cie_lab_max,
+        see_theory_max=data.see_theory_max,
+        see_lab_max=data.see_lab_max,
     )
     db.add(subject)
     db.commit()

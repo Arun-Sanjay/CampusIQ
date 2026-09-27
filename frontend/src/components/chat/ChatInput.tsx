@@ -44,7 +44,7 @@ export default function ChatInput({
             disabled={disabled}
             rows={1}
             className={clsx(
-              'input-base w-full resize-none min-h-[42px] max-h-32',
+              'input-base w-full resize-none min-h-[44px] max-h-32 text-base md:text-sm',
               disabled && 'opacity-50 cursor-not-allowed',
             )}
           />
@@ -53,7 +53,7 @@ export default function ChatInput({
           type="submit"
           disabled={!value.trim() || disabled}
           className={clsx(
-            'p-2.5 rounded-lg transition-all duration-200',
+            'p-2.5 rounded-lg transition-all duration-200 tap-target flex items-center justify-center shrink-0',
             value.trim() && !disabled
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
               : 'bg-[var(--bg-tertiary)] text-[var(--text-tertiary)] cursor-not-allowed',

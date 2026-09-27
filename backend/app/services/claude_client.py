@@ -9,15 +9,39 @@ Cost management rule (from the project skill):
 """
 from __future__ import annotations
 
+import base64
 import logging
 from collections.abc import Iterator
 from functools import lru_cache
+from pathlib import Path
 
 import anthropic
 
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+# Anthropic limits: ~5 MB/image, up to ~100 images/request. Stay well under so
+# answer-sheet grading never trips a 413.
+MAX_IMAGES_PER_VISION_CALL = 8
+MAX_IMAGE_BYTES = 4 * 1024 * 1024
+
+_IMAGE_MAGIC: list[tuple[bytes, str]] = [
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"GIF87a", "image/gif"),
+    (b"GIF89a", "image/gif"),
+]
+
+
+def _sniff_media_type(data: bytes, default: str = "image/png") -> str:
+    """Best-effort image MIME sniff from magic bytes (no Pillow)."""
+    for magic, media_type in _IMAGE_MAGIC:
+        if data.startswith(magic):
+            return media_type
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return default
 
 
 @lru_cache(maxsize=1)
@@ -180,6 +204,83 @@ def stream_completion(
     except Exception as e:
         logger.exception("Unexpected Claude streaming error: %s", e)
         yield f"\n\n[Unexpected error: {e}]"
+
+
+def generate_completion_vision(
+    system: str,
+    text: str,
+    images: list[bytes | str | Path],
+    *,
+    max_tokens: int = 2048,
+    temperature: float = 0.2,
+    media_type_default: str = "image/png",
+) -> str:
+    """Single-turn vision completion: a text prompt plus N images.
+
+    Each image may be raw bytes or a filesystem path. Oversized images
+    (> MAX_IMAGE_BYTES) are skipped and logged; at most
+    MAX_IMAGES_PER_VISION_CALL images are sent. Mirrors generate_completion's
+    model selection (active_anthropic_model) and graceful degradation — returns
+    "" on missing key / error, never raises. Used by the answer-sheet OCR+grader.
+    """
+    client = _get_client()
+    if client is None:
+        logger.info("Claude client not configured — skipping vision completion")
+        return ""
+
+    content: list[dict] = [{"type": "text", "text": text}]
+    used = 0
+    for img in images:
+        if used >= MAX_IMAGES_PER_VISION_CALL:
+            logger.warning("vision: capping at %d images (got more)", MAX_IMAGES_PER_VISION_CALL)
+            break
+        try:
+            data = Path(img).read_bytes() if isinstance(img, (str, Path)) else bytes(img)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("vision: could not read image: %s", e)
+            continue
+        if not data:
+            continue
+        if len(data) > MAX_IMAGE_BYTES:
+            logger.warning("vision: skipping oversize image (%d bytes)", len(data))
+            continue
+        content.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": _sniff_media_type(data, media_type_default),
+                    "data": base64.standard_b64encode(data).decode("ascii"),
+                },
+            }
+        )
+        used += 1
+
+    settings = get_settings()
+    model = settings.active_anthropic_model
+
+    try:
+        response = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system=system,
+            messages=[{"role": "user", "content": content}],
+        )
+    except anthropic.APIError as e:
+        logger.exception("Claude vision API error: %s", e)
+        return ""
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Unexpected Claude vision error: %s", e)
+        return ""
+
+    if not response.content:
+        return ""
+    parts: list[str] = []
+    for block in response.content:
+        if getattr(block, "type", None) == "text":
+            parts.append(getattr(block, "text", ""))
+    return "".join(parts).strip()
 
 
 # ═══════════════════════════════════════════════════════════════

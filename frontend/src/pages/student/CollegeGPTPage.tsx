@@ -139,7 +139,7 @@ export default function CollegeGPTPage() {
   }
 
   return (
-    <div className="space-y-4 h-[calc(100vh-8rem)] flex flex-col">
+    <div className="space-y-4 h-[calc(100dvh-8rem)] flex flex-col">
       <Card className="flex items-center justify-between gap-3 py-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <Info className="h-4 w-4 text-info shrink-0" />

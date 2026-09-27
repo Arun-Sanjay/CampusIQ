@@ -43,6 +43,18 @@ class Settings(BaseSettings):
     openai_api_key: str = ""  # for Whisper
     elevenlabs_api_key: str = ""  # for TTS in voice interviews
 
+    # ── ElevenLabs Conversational AI (Agents) — live voice interview ──
+    # One reusable agent whose per-round prompt/first-message/voice we override
+    # at startSession time. Provision it once with
+    # `scripts/provision_elevenlabs_agent.py`, then paste the id here.
+    elevenlabs_agent_id: str = ""
+    elevenlabs_api_base: str = "https://api.elevenlabs.io"
+
+    @property
+    def conversational_agent_available(self) -> bool:
+        """True when the live voice-interview agent can be used."""
+        return bool(self.elevenlabs_api_key and self.elevenlabs_agent_id)
+
     # ── CORS ──
     frontend_url: str = "http://localhost:5173"
     cors_allowed_origins: str = "http://localhost:5173,http://localhost:3000"
@@ -58,6 +70,12 @@ class Settings(BaseSettings):
 
     # ── Rate limiting (used in Phase 21) ──
     claude_requests_per_minute: int = 20  # per-user limit to prevent runaway costs
+
+    # ── Coding curriculum (Phase 2) ──
+    # When True (prod/dev), the Coding section lazily seeds the full 38-pattern /
+    # 376-problem LeetCode curriculum. Tests set this False so the coding suite
+    # runs against just the 5 deterministic in-app-judge problems.
+    seed_dsa_curriculum: bool = True
 
     # ── Audio storage retention (Phase 6) ──
     # Recordings older than this are purged on a periodic background task.

@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react'
+import { useIsMobile } from '../../hooks/useMediaQuery'
 
 // Lazy-load @monaco-editor/react so its ~3MB chunk doesn't ship to surfaces
 // that never open a coding problem. Vite will code-split this automatically.
@@ -35,6 +36,11 @@ export default function CodeEditor({
       document.documentElement.classList.contains('nebula'))
   const theme = isDark ? 'vs-dark' : 'vs'
 
+  // Monaco is hostile to phones: 13px text triggers iOS focus-zoom, and line
+  // numbers + the folding gutter eat scarce horizontal space. On mobile bump
+  // the font to 16px (the iOS no-zoom threshold) and reclaim the gutter.
+  const isMobile = useIsMobile()
+
   return (
     <Suspense fallback={<EditorFallback />}>
       <MonacoEditor
@@ -45,7 +51,7 @@ export default function CodeEditor({
         height={height}
         options={{
           readOnly,
-          fontSize: 13,
+          fontSize: isMobile ? 16 : 13,
           fontFamily:
             'ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace',
           minimap: { enabled: false },
@@ -57,6 +63,8 @@ export default function CodeEditor({
           padding: { top: 12, bottom: 12 },
           automaticLayout: true,
           wordWrap: 'on',
+          lineNumbers: isMobile ? 'off' : 'on',
+          folding: !isMobile,
         }}
       />
     </Suspense>

@@ -113,7 +113,7 @@ export default function KnowledgeEditorPage() {
       initial="initial"
       animate="animate"
     >
-      <motion.div variants={fadeUp} className="flex items-start justify-between gap-3">
+      <motion.div variants={fadeUp} className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">
             Knowledge Editor

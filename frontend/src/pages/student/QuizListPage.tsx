@@ -8,6 +8,7 @@ import {
   HelpCircle,
   Loader2,
   Play,
+  Smartphone,
   TrendingDown,
 } from 'lucide-react'
 import Card from '../../components/ui/Card'
@@ -15,6 +16,7 @@ import Badge from '../../components/ui/Badge'
 import type { BadgeVariant } from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import ProgressBar from '../../components/ui/ProgressBar'
+import { useIsMobile } from '../../hooks/useMediaQuery'
 import { ApiError, quizzesApi } from '../../api/client'
 import type {
   AttemptHistoryRow,
@@ -65,6 +67,7 @@ type Tab = typeof tabs[number]
 
 export default function QuizListPage() {
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
   const [activeTab, setActiveTab] = useState<Tab>('Available')
 
   const [quizzes, setQuizzes] = useState<QuizSummary[]>([])
@@ -154,7 +157,12 @@ export default function QuizListPage() {
               initial="initial"
               animate="animate"
             >
-              {quizzes.map((quiz) => (
+              {quizzes.map((quiz) => {
+                // Proctored tests need fullscreen + tab monitoring, which phones
+                // can't enforce — gate them to a laptop. Practice quizzes stay
+                // fully usable on mobile.
+                const proctoredOnMobile = quiz.mode === 'test' && isMobile
+                return (
                 <motion.div key={quiz.id} variants={fadeUp}>
                   <Card hover className="flex flex-col gap-3">
                     <div className="flex items-start justify-between">
@@ -168,7 +176,7 @@ export default function QuizListPage() {
                         {quiz.difficulty}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-3 text-xs text-[var(--text-tertiary)]">
+                    <div className="flex items-center gap-3 text-xs text-[var(--text-tertiary)] flex-wrap">
                       <span className="flex items-center gap-1">
                         <HelpCircle className="h-3 w-3" />
                         {quiz.question_count} questions
@@ -179,18 +187,38 @@ export default function QuizListPage() {
                           {quiz.time_limit_minutes} min
                         </span>
                       )}
+                      {quiz.mode === 'test' && (
+                        <Badge variant="warning" size="sm">Proctored Test · single attempt</Badge>
+                      )}
                     </div>
+                    {proctoredOnMobile && (
+                      <div className="flex items-start gap-2 text-xs rounded-lg px-2.5 py-2 bg-warning/10 border border-warning/30 text-[var(--text-secondary)]">
+                        <Smartphone className="h-3.5 w-3.5 mt-0.5 shrink-0 text-warning" />
+                        <span>📵 Proctored tests are best taken on a laptop (they need fullscreen + tab monitoring).</span>
+                      </div>
+                    )}
                     <Button
                       size="sm"
                       icon={Play}
                       className="w-full mt-auto"
-                      onClick={() => navigate(`/student/quizzes/${quiz.id}/take`)}
+                      disabled={proctoredOnMobile || (quiz.mode === 'test' && !quiz.can_attempt)}
+                      onClick={() => {
+                        if (proctoredOnMobile) return
+                        navigate(
+                          quiz.mode === 'test'
+                            ? `/student/quizzes/${quiz.id}/proctored`
+                            : `/student/quizzes/${quiz.id}/take`,
+                        )
+                      }}
                     >
-                      Start Quiz
+                      {quiz.mode === 'test'
+                        ? (proctoredOnMobile ? 'Laptop required' : quiz.can_attempt ? 'Start Test' : 'Attempt used')
+                        : 'Start Quiz'}
                     </Button>
                   </Card>
                 </motion.div>
-              ))}
+                )
+              })}
             </motion.div>
           )}
         </>
@@ -207,8 +235,8 @@ export default function QuizListPage() {
             </Card>
           ) : (
             <Card padding={false}>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto scroll-touch">
+                <table className="w-full min-w-[600px] text-sm">
                   <thead>
                     <tr className="border-b border-[var(--border-default)]">
                       {['Date', 'Quiz', 'Subject', 'Score', 'Time', 'Difficulty'].map((h) => (

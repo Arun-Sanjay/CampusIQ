@@ -30,3 +30,6 @@ Thumbs.db
 .claude/
 .idea/
 .vscode/
+
+# Reference PDFs (college handbook / question papers) — kept local, repo is public
+grading_mdfiles/*.pdf

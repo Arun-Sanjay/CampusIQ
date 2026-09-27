@@ -50,7 +50,7 @@ export default function SkillAnalyticsPage() {
 
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
-      <motion.div variants={fadeUp} className="flex items-center justify-between">
+      <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-[var(--text-primary)]">Skill Analytics</h1>
           <p className="text-sm text-[var(--text-tertiary)] mt-1">
@@ -124,7 +124,7 @@ export default function SkillAnalyticsPage() {
 
       {result && (
         <>
-          <motion.div variants={fadeUp} className="grid grid-cols-3 gap-4">
+          <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <StatCard
               label="MATCHING STUDENTS"
               value={`${result.union_count_actual} / ${result.total_students}`}

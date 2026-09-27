@@ -1,0 +1,152 @@
+{
+  "model": "claude-haiku-4-5-20251001",
+  "rag_faithfulness": {
+    "questions": 25,
+    "scored": 25,
+    "errored": 0,
+    "faithfulness_accuracy_pct": 88.0,
+    "faithful": 22,
+    "unfaithful": 3,
+    "retrieval_recall_at_5_pct": 96.0,
+    "mean_answer_chars": 1279.0,
+    "latency_reply_ttft_s": {
+      "n": 25,
+      "mean": 1.7,
+      "median": 1.48,
+      "p90": 2.35,
+      "min": 0.65,
+      "max": 7.29
+    },
+    "latency_reply_total_s": {
+      "n": 25,
+      "mean": 5.62,
+      "median": 5.29,
+      "p90": 6.63,
+      "min": 2.97,
+      "max": 15.25
+    },
+    "latency_retrieval_ms": {
+      "n": 25,
+      "mean": 438.64,
+      "median": 288.28,
+      "p90": 735.07,
+      "min": 129.58,
+      "max": 1787.52
+    },
+    "unfaithful_examples": [
+      {
+        "q": "# Keypad and Stepper Motor Interfacing\n\n**In the keypad scanning function, why is `IO0CLR = (0x0F << 16)` executed before `IO0SET = (~(1<<(row+16))) & (0x0F<<16)` in each iteration of the row loop?**",
+        "reason": "The answer claims IO0CLR sets rows to LOW, but the course material shows IO0CLR = (0x0F << 16) sets rows to LOW (correct), yet the answer then contradicts itself by saying IO0SET sets rows back to HIGH except current row\u2014when actually IO0SET would set them HIGH, and the logic (~(1<<(row+16))) ensures only the current row stays LOW after the SET operation; the explanation conflates the order and purpose, and the 'ghosting' terminology and detailed atomic bit manipulation reasoning are not supported by the material."
+      },
+      {
+        "q": "# Binomial Theorem and Multinomial Coefficients\n\n**Question:** Using the Binomial Theorem, find the coefficient of $a^5b^2$ in the expansion of $(2a - 3b)^7$.",
+        "reason": ""
+      },
+      {
+        "q": "**Question on Bit Manipulation in LPC2148 Programming:**\n\nIn an LPC2148 embedded system, you need to turn OFF bit 5 of a GPIO register without affecting any other bits. Which bit manipulation operation should you use, and what does the bitwise operator `~` accomplish in this context?",
+        "reason": "The course material covers GPIO registers (IOxSET, IOxCLR) and PSR bit layout but contains no information about bitwise operators (~, &, <<), bit manipulation techniques, or how to turn OFF bits using complement masks\u2014the tutor's answer is entirely unsupported by the provided material."
+      }
+    ]
+  },
+  "grading_agreement": {
+    "sheets": 5,
+    "questions_per_sheet": 6,
+    "graded_pairs": 30,
+    "exact_agreement_pct": 76.7,
+    "within_1_mark_pct": 100.0,
+    "mean_abs_error_marks": 0.12,
+    "sheet_total_mae_marks": 0.3,
+    "marks_per_sheet": 22,
+    "sheet_breakdown": [
+      {
+        "usn": "1RV23CS001",
+        "ai_total": 22.0,
+        "truth_total": 22.0,
+        "detected_usn": "1RV23CS001"
+      },
+      {
+        "usn": "1RV23CS002",
+        "ai_total": 9.0,
+        "truth_total": 9.0,
+        "detected_usn": "1RV23CS002"
+      },
+      {
+        "usn": "1RV23CS003",
+        "ai_total": 15.0,
+        "truth_total": 15.0,
+        "detected_usn": "1RV23CS003"
+      },
+      {
+        "usn": "1RV23CS004",
+        "ai_total": 12.5,
+        "truth_total": 13.0,
+        "detected_usn": "1RV23CS004"
+      },
+      {
+        "usn": "1RV23CS005",
+        "ai_total": 19.0,
+        "truth_total": 20.0,
+        "detected_usn": "1RV23CS005"
+      }
+    ]
+  },
+  "ingestion_latency": {
+    "embedding_model_cold_load_s": 0.25,
+    "docs": [
+      {
+        "file": "0369ec55-edd3-4613-802a-30914cb3d9a9_IOT-CIE2.pdf",
+        "chars": 12803,
+        "chunks": 5,
+        "extract_s": 0.04,
+        "chunk_s": 0.001,
+        "embed_s": 0.12,
+        "total_s": 0.15
+      },
+      {
+        "file": "186b8d2c-89e5-4758-a15b-36e2fdda79e4_CN-CIE-3scheme_2026.pdf",
+        "chars": 4624,
+        "chunks": 2,
+        "extract_s": 0.02,
+        "chunk_s": 0.0,
+        "embed_s": 0.04,
+        "total_s": 0.06
+      },
+      {
+        "file": "e2557de6-a080-4675-93d7-1c617193d8fc_IoT_CIE1_Enhanced_Notes.pdf",
+        "chars": 55169,
+        "chunks": 20,
+        "extract_s": 0.08,
+        "chunk_s": 0.002,
+        "embed_s": 0.47,
+        "total_s": 0.55
+      },
+      {
+        "file": "e245a38f-dcb8-4d65-813a-30f823b23f9a_Handbook_2025-26-28-08-2025-final.pdf",
+        "chars": 131273,
+        "chunks": 45,
+        "extract_s": 0.16,
+        "chunk_s": 0.005,
+        "embed_s": 0.39,
+        "total_s": 0.56
+      },
+      {
+        "file": "a60fcf10-e661-4ae8-8e00-08bd67b68f2a_IoT_CIE1_Enhanced_Notes.pdf",
+        "chars": 55169,
+        "chunks": 20,
+        "extract_s": 0.07,
+        "chunk_s": 0.002,
+        "embed_s": 0.13,
+        "total_s": 0.2
+      }
+    ],
+    "ingestion_total_s": {
+      "n": 5,
+      "mean": 0.3,
+      "median": 0.2,
+      "p90": 0.56,
+      "min": 0.06,
+      "max": 0.56
+    },
+    "ingestion_per_1k_chars_s": 0.009
+  }
+}

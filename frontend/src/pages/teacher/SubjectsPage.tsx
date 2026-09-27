@@ -130,7 +130,7 @@ export default function SubjectsPage() {
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
       {/* Header */}
-      <motion.div variants={fadeUp} className="flex items-center justify-between">
+      <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">My Subjects</h2>
           <p className="text-sm text-[var(--text-tertiary)] mt-0.5">
@@ -260,7 +260,7 @@ export default function SubjectsPage() {
             disabled={creating}
             rows={2}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="SEMESTER"
               type="number"

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
-import { clsx } from 'clsx'
 import { AlertCircle, Loader2, Search } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import Avatar from '../../components/ui/Avatar'
 import Badge from '../../components/ui/Badge'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
+import { ResponsiveTable, type ResponsiveColumn } from '../../components/ui'
 import { ApiError, adminApi } from '../../api/client'
 import type { AdminUserRole, AdminUserRow } from '../../types'
 
@@ -84,9 +84,70 @@ export default function UserManagementPage() {
     return counts
   }, [users])
 
+  const columns: ResponsiveColumn<AdminUserRow>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      primary: true,
+      render: (u) => (
+        <div className="flex items-center gap-2">
+          <Avatar name={u.full_name} size="sm" />
+          <span className="text-[var(--text-primary)] font-medium">{u.full_name}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      className: 'text-[var(--text-secondary)]',
+      render: (u) => u.email,
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (u) => (
+        <Badge variant={ROLE_BADGE[u.role]} size="sm">
+          {u.role}
+        </Badge>
+      ),
+    },
+    {
+      key: 'branch',
+      header: 'Branch / Dept',
+      className: 'text-[var(--text-secondary)]',
+      render: (u) =>
+        u.role === 'student'
+          ? u.branch
+            ? `${u.branch}${u.semester ? ` · S${u.semester}` : ''}`
+            : '—'
+          : u.department ?? '—',
+    },
+    {
+      key: 'last_login',
+      header: 'Last Login',
+      className: 'text-[var(--text-tertiary)]',
+      render: (u) => formatDate(u.last_login),
+    },
+    {
+      key: 'joined',
+      header: 'Joined',
+      className: 'text-[var(--text-tertiary)]',
+      render: (u) => formatDate(u.created_at),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (u) => (
+        <Badge variant={u.is_active ? 'success' : 'danger'} size="sm" dot>
+          {u.is_active ? 'Active' : 'Disabled'}
+        </Badge>
+      ),
+    },
+  ]
+
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
-      <motion.div variants={fadeUp} className="flex items-center justify-between">
+      <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-[var(--text-primary)]">User Management</h1>
           <p className="text-sm text-[var(--text-tertiary)] mt-1">
@@ -96,7 +157,7 @@ export default function UserManagementPage() {
         </div>
       </motion.div>
 
-      <motion.div variants={fadeUp} className="flex gap-4">
+      <motion.div variants={fadeUp} className="flex flex-col gap-3 sm:flex-row sm:gap-4">
         <div className="flex-1">
           <Input
             placeholder="Search by name or email…"
@@ -105,7 +166,7 @@ export default function UserManagementPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="w-48">
+        <div className="sm:w-48">
           <Select
             options={ROLE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
             value={roleFilter}
@@ -128,94 +189,21 @@ export default function UserManagementPage() {
 
       <motion.div variants={fadeUp}>
         <Card padding={false}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border-default)]">
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Name
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Email
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Role
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Branch / Dept
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Last Login
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Joined
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-[var(--text-tertiary)]">
-                      <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
-                      Loading users…
-                    </td>
-                  </tr>
-                ) : users.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-[var(--text-tertiary)]">
-                      No users match the current filters.
-                    </td>
-                  </tr>
-                ) : (
-                  users.map((u, i) => (
-                    <motion.tr
-                      key={u.id}
-                      className={clsx('border-b border-[var(--border-default)] last:border-b-0')}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.05 + Math.min(i, 20) * 0.02 }}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Avatar name={u.full_name} size="sm" />
-                          <span className="text-[var(--text-primary)] font-medium">
-                            {u.full_name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-secondary)]">{u.email}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant={ROLE_BADGE[u.role]} size="sm">
-                          {u.role}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-secondary)]">
-                        {u.role === 'student'
-                          ? u.branch
-                            ? `${u.branch}${u.semester ? ` · S${u.semester}` : ''}`
-                            : '—'
-                          : u.department ?? '—'}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-tertiary)]">
-                        {formatDate(u.last_login)}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-tertiary)]">
-                        {formatDate(u.created_at)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant={u.is_active ? 'success' : 'danger'} size="sm" dot>
-                          {u.is_active ? 'Active' : 'Disabled'}
-                        </Badge>
-                      </td>
-                    </motion.tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            columns={columns}
+            rows={loading ? [] : users}
+            rowKey={(u) => u.id}
+            empty={
+              loading ? (
+                <span>
+                  <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
+                  Loading users…
+                </span>
+              ) : (
+                'No users match the current filters.'
+              )
+            }
+          />
         </Card>
       </motion.div>
     </motion.div>

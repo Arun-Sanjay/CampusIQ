@@ -137,7 +137,7 @@ export default function DashboardPage() {
 
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
-      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4">
+      <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {data.stats.map((stat, i) => (
           <motion.div
             key={stat.label}
@@ -157,7 +157,7 @@ export default function DashboardPage() {
 
       <motion.div variants={fadeUp}>
         <CardLabel className="mb-3 block">QUICK ACTIONS</CardLabel>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {quickActions.map((action) => {
             const Icon = action.icon
             return (

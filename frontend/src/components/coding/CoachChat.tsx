@@ -224,8 +224,9 @@ export default function CoachChat({ problemId, problemTitle }: CoachChatProps) {
         <div ref={scrollRef} />
       </div>
 
-      {/* Accessory + input */}
-      <div className="border-t border-[var(--border-default)] px-3 py-2.5">
+      {/* Accessory + input — pinned at the bottom of the flex column; pb-safe
+          keeps it clear of the iOS home indicator. */}
+      <div className="border-t border-[var(--border-default)] px-3 py-2.5 pb-safe shrink-0 bg-[var(--bg-elevated)]">
         {coachMode === 'hint' ? (
           <HintLadder level={hintLevel} blurb={activeRung.blurb} onChange={setHintLevel} disabled={streaming} />
         ) : (

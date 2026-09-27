@@ -254,3 +254,41 @@ def test_teacher_blocked_from_coding(client, signup_payload):
     headers = _teacher_headers(client, signup_payload)
     r = client.get("/api/v1/coding/problems", headers=headers)
     assert r.status_code == 403
+
+
+# ────────────────────────────────────────────────────────────────
+# Phase 2 — pattern curriculum seeder
+# ────────────────────────────────────────────────────────────────
+
+
+def test_curriculum_seed_loads_patterns_and_enriches_judge_problems(db_session):
+    """The curriculum seeder (off by default in tests) loads 38 patterns + 376
+    problems, merges into the 5 in-app-judge problems instead of duplicating,
+    and is idempotent."""
+    from app.models.coding import CodingPattern, CodingProblem
+    from app.services import dsa_curriculum_seed
+
+    inserted = dsa_curriculum_seed.seed_if_empty(db_session)
+    assert inserted == 371  # 376 total minus the 5 pre-seeded judge problems
+
+    patterns = db_session.query(CodingPattern).all()
+    assert len(patterns) == 38
+    problems = db_session.query(CodingProblem).all()
+    assert len(problems) == 376
+
+    # The 5 judge problems were enriched, not duplicated: still seed_inapp, now
+    # carrying a pattern + sequence, and still have their starter code.
+    two_sum = db_session.query(CodingProblem).filter_by(slug="two-sum").one()
+    assert two_sum.source == "seed_inapp"
+    assert two_sum.pattern_id is not None
+    assert two_sum.seq is not None
+    assert two_sum.starter_code  # judge fields intact
+
+    # A LeetCode-only curriculum problem exists with empty judge fields.
+    cd = db_session.query(CodingProblem).filter_by(slug="contains-duplicate").one()
+    assert cd.source == "curriculum"
+    assert cd.starter_code == {}
+    assert cd.leetcode_url == "https://leetcode.com/problems/contains-duplicate/"
+
+    # Idempotent.
+    assert dsa_curriculum_seed.seed_if_empty(db_session) == 0

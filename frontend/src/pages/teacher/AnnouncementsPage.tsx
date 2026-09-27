@@ -192,7 +192,7 @@ export default function AnnouncementsPage() {
               onChange={(e) => setBody(e.target.value)}
             />
             <div className="flex flex-wrap items-end gap-4">
-              <div className="w-48">
+              <div className="w-full sm:w-48">
                 <Select
                   label="Target"
                   options={targetOptions}
@@ -202,7 +202,7 @@ export default function AnnouncementsPage() {
                 />
               </div>
               {target === 'subject' && (
-                <div className="w-72">
+                <div className="w-full sm:w-72">
                   <Select
                     label="Subject"
                     options={subjectOptions}

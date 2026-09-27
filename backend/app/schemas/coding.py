@@ -75,6 +75,16 @@ class ProblemDetail(BaseModel):
     skill_node_names: list[str]
     leetcode_url: str
     user_status: UserProblemStatus = "unsolved"
+    # Phase 2 curriculum context. `has_editor` is False for LeetCode-only
+    # curriculum problems (no in-app Pyodide judge) — the frontend hides the
+    # Code Editor toggle for those.
+    source: str = "seed_inapp"
+    has_editor: bool = True
+    lc_number: int | None = None
+    priority: str | None = None
+    is_premium: bool = False
+    pattern_slug: str | None = None
+    pattern_name: str | None = None
 
 
 class ProblemRunnerPayload(BaseModel):
@@ -147,3 +157,56 @@ class MarkSolvedResponse(BaseModel):
     xp_earned: int = 0
     new_level: int | None = None
     leveled_up: bool = False
+
+
+# ── Phase 2: pattern curriculum ──────────────────────────────────────────────
+
+CodingTrackLiteral = Literal["core", "advanced"]
+
+
+class PatternListItem(BaseModel):
+    """A pattern box in the Coding section. `solved_count` / `problem_count`
+    drive the per-pattern progress bar."""
+
+    slug: str
+    name: str
+    track: CodingTrackLiteral
+    tier: int
+    order_num: int
+    core_idea: str
+    recognize_when: str
+    difficulty_span: str
+    problem_count: int
+    solved_count: int = 0
+
+
+class PatternProblemRow(BaseModel):
+    """One problem inside a pattern's ordered list."""
+
+    id: uuid.UUID
+    slug: str
+    title: str
+    difficulty: CodingDifficultyLiteral
+    seq: int | None = None
+    lc_number: int | None = None
+    priority: str | None = None
+    is_premium: bool = False
+    also_appears_in: str | None = None
+    leetcode_url: str
+    has_editor: bool = False
+    user_status: UserProblemStatus = "unsolved"
+
+
+class PatternWithProblems(BaseModel):
+    """A pattern + its ordered problems — the pattern detail view."""
+
+    slug: str
+    name: str
+    track: CodingTrackLiteral
+    tier: int
+    core_idea: str
+    recognize_when: str
+    difficulty_span: str
+    problem_count: int
+    solved_count: int = 0
+    problems: list[PatternProblemRow]

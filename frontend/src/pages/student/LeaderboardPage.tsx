@@ -6,6 +6,7 @@ import Card, { CardHeader, CardTitle } from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import type { BadgeVariant } from '../../components/ui/Badge'
 import Avatar from '../../components/ui/Avatar'
+import { ResponsiveTable, type ResponsiveColumn } from '../../components/ui'
 import { ApiError, gamificationApi } from '../../api/client'
 import type { LeaderboardResponse, LeaderboardRowResponse, Tier } from '../../types'
 
@@ -84,9 +85,70 @@ export default function LeaderboardPage() {
   const rest = data.rows.slice(3)
   const myRow = data.my_row
 
+  const rankColumns: ResponsiveColumn<LeaderboardRowResponse>[] = [
+    {
+      key: 'rank',
+      header: 'Rank',
+      headerClassName: 'w-12',
+      className: 'font-semibold text-[var(--text-primary)]',
+      render: (row) => `#${row.rank}`,
+    },
+    {
+      key: 'name',
+      header: 'Name',
+      primary: true,
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <Avatar name={row.name} size="sm" />
+          <span className="text-[var(--text-primary)] font-medium">
+            {row.name}
+            {row.is_current_user && <span className="ml-2 text-xs text-primary">(you)</span>}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'score',
+      header: 'Score',
+      headerClassName: 'text-right',
+      className: 'text-right tabular-nums font-semibold text-[var(--text-primary)]',
+      render: (row) => row.total_score.toFixed(1),
+    },
+    {
+      key: 'level',
+      header: 'Level',
+      headerClassName: 'text-right',
+      className: 'text-right tabular-nums text-[var(--text-secondary)]',
+      render: (row) => (
+        <span className="inline-flex items-center gap-1">
+          <Zap className="h-3 w-3" />
+          {row.current_level}
+        </span>
+      ),
+    },
+    {
+      key: 'xp',
+      header: 'XP',
+      headerClassName: 'text-right',
+      className: 'text-right tabular-nums text-[var(--text-secondary)]',
+      render: (row) => row.xp_total.toLocaleString(),
+    },
+    {
+      key: 'tier',
+      header: 'Tier',
+      headerClassName: 'text-center',
+      className: 'text-center',
+      render: (row) => (
+        <Badge variant={TIER_META[row.tier].variant} size="sm">
+          {TIER_META[row.tier].label}
+        </Badge>
+      ),
+    },
+  ]
+
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
-      <motion.div variants={fadeUp} className="flex items-center justify-between">
+      <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-[var(--text-primary)]">Leaderboard</h1>
           <p className="text-sm text-[var(--text-tertiary)] mt-1">
@@ -114,7 +176,7 @@ export default function LeaderboardPage() {
             <CardHeader>
               <CardTitle>Top {top3.length}</CardTitle>
             </CardHeader>
-            <div className="flex items-end justify-center gap-6 pt-6">
+            <div className="flex items-end justify-center gap-3 sm:gap-6 pt-6">
               {top3.length >= 2 && <PodiumBlock row={top3[1]!} height="md" place={2} />}
               {top3[0] && <PodiumBlock row={top3[0]} height="lg" place={1} />}
               {top3.length >= 3 && <PodiumBlock row={top3[2]!} height="sm" place={3} />}
@@ -130,37 +192,11 @@ export default function LeaderboardPage() {
             <CardHeader className="px-4 pt-4">
               <CardTitle>Ranked Players</CardTitle>
             </CardHeader>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border-default)]">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider w-12">
-                      Rank
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Score
-                    </th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Level
-                    </th>
-                    <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                      XP
-                    </th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                      Tier
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rest.map((row) => (
-                    <RankRow key={row.student_id} row={row} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ResponsiveTable
+              columns={rankColumns}
+              rows={rest}
+              rowKey={(row) => row.student_id}
+            />
           </Card>
         </motion.div>
       )}
@@ -245,46 +281,5 @@ function PodiumBlock({
         #{place}
       </div>
     </div>
-  )
-}
-
-function RankRow({ row }: { row: LeaderboardRowResponse }) {
-  return (
-    <tr
-      className={clsx(
-        'border-b border-[var(--border-default)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors',
-        row.is_current_user && 'bg-primary/5 hover:bg-primary/10',
-      )}
-    >
-      <td className="px-4 py-3 font-semibold text-[var(--text-primary)]">#{row.rank}</td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Avatar name={row.name} size="sm" />
-          <span className="text-[var(--text-primary)] font-medium">
-            {row.name}
-            {row.is_current_user && (
-              <span className="ml-2 text-xs text-primary">(you)</span>
-            )}
-          </span>
-        </div>
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums font-semibold text-[var(--text-primary)]">
-        {row.total_score.toFixed(1)}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums text-[var(--text-secondary)]">
-        <span className="inline-flex items-center gap-1">
-          <Zap className="h-3 w-3" />
-          {row.current_level}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums text-[var(--text-secondary)]">
-        {row.xp_total.toLocaleString()}
-      </td>
-      <td className="px-4 py-3 text-center">
-        <Badge variant={TIER_META[row.tier].variant} size="sm">
-          {TIER_META[row.tier].label}
-        </Badge>
-      </td>
-    </tr>
   )
 }

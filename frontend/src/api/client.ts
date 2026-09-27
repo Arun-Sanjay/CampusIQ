@@ -32,6 +32,8 @@ import type {
   ChunkUpdate,
   CodingStatsResponse,
   MarkSolvedResponse,
+  PatternListItem,
+  PatternWithProblems,
   CollegeDocument,
   CollegeDocumentCategory,
   KnowledgeSuggestion,
@@ -58,7 +60,8 @@ import type {
   InterviewSessionResponse,
   InterviewStartRequest,
   InterviewTurnResponse,
-  InterviewVoiceTurnResponse,
+  LiveRoundStartResponse,
+  LiveRoundFinalizeResponse,
   VoiceCapabilitiesResponse,
   JobApplicationCreate,
   JobApplicationResponse,
@@ -69,8 +72,26 @@ import type {
   Document,
   DocumentChunkPreview,
   DocumentWithSubject,
+  EnrolledStudent,
+  SubjectRoster,
+  TeacherSubjectCount,
   GitHubImportRequest,
   GitHubImportResponse,
+  AnswerSheetDetail,
+  AnswerSheetSummary,
+  CourseOutcomeResponse,
+  CoverScanResult,
+  ExamAttainmentResponse,
+  ExamCreate,
+  ManualResultEntry,
+  ExamQuestionInput,
+  ExamQuestionResponse,
+  ExamResponse,
+  GradeConfigResponse,
+  ReviewQueueItem,
+  SchemeResponse,
+  ClassGradeOverview,
+  TranscriptResponse,
   LeaderboardResponse,
   LoginRequest,
   ProfileUpdateRequest,
@@ -82,6 +103,9 @@ import type {
   QuizGenerateRequest,
   QuizSummary,
   QuizUpdate,
+  ProctorEventIn,
+  ProctorReport,
+  StartAttemptResponse,
   ResumeChatHistory,
   ResumeChatRequest,
   ResumeChatResponse,
@@ -217,9 +241,20 @@ export const api = {
 
 export const authApi = {
   signup: (data: SignupRequest) => api.post<TokenResponse>('/auth/signup', data),
-  login: (email: string, password: string) =>
-    api.post<TokenResponse>('/auth/login', { email, password } satisfies LoginRequest),
+  // `identifier` may be an email or a username.
+  login: (identifier: string, password: string) =>
+    api.post<TokenResponse>('/auth/login', { identifier, password } satisfies LoginRequest),
   me: () => api.get<User>('/auth/me'),
+}
+
+// ── Enrollment (teacher roster) ──
+export const enrollmentApi = {
+  mySubjects: () => api.get<TeacherSubjectCount[]>('/enrollments/my-subjects'),
+  roster: (subjectId: string) => api.get<SubjectRoster>(`/enrollments/subjects/${subjectId}`),
+  enroll: (subjectId: string, username: string) =>
+    api.post<EnrolledStudent>(`/enrollments/subjects/${subjectId}`, { username }),
+  unenroll: (subjectId: string, studentId: string) =>
+    api.delete<void>(`/enrollments/subjects/${subjectId}/students/${studentId}`),
 }
 
 // ── Subject CRUD ──
@@ -230,6 +265,89 @@ export const subjectsApi = {
   create: (data: SubjectCreate) => api.post<Subject>('/subjects/', data),
   update: (id: string, data: SubjectUpdate) => api.patch<Subject>(`/subjects/${id}`, data),
   delete: (id: string) => api.delete<void>(`/subjects/${id}`),
+}
+
+// ── AI Auto-Grader + grading ──
+export const gradingApi = {
+  listExams: (subjectId?: string) =>
+    api.get<ExamResponse[]>(`/grading/exams${subjectId ? `?subject_id=${subjectId}` : ''}`),
+  getExam: (id: string) => api.get<ExamResponse>(`/grading/exams/${id}`),
+  createExam: (data: ExamCreate) => api.post<ExamResponse>('/grading/exams', data),
+  updateExam: (id: string, data: Record<string, unknown>) =>
+    api.patch<ExamResponse>(`/grading/exams/${id}`, data),
+  deleteExam: (id: string) => api.delete<void>(`/grading/exams/${id}`),
+
+  uploadScheme: (examId: string, file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<ExamResponse>(`/grading/exams/${examId}/scheme`, fd)
+  },
+  getScheme: (examId: string) => api.get<SchemeResponse>(`/grading/exams/${examId}/scheme`),
+  confirmScheme: (examId: string) => api.post<ExamResponse>(`/grading/exams/${examId}/scheme/confirm`),
+  addQuestion: (examId: string, data: ExamQuestionInput) =>
+    api.post<ExamQuestionResponse>(`/grading/exams/${examId}/questions`, data),
+  updateQuestion: (examId: string, qid: string, data: Partial<ExamQuestionInput>) =>
+    api.patch<ExamQuestionResponse>(`/grading/exams/${examId}/questions/${qid}`, data),
+  deleteQuestion: (examId: string, qid: string) =>
+    api.delete<void>(`/grading/exams/${examId}/questions/${qid}`),
+
+  getConfig: (subjectId: string) => api.get<GradeConfigResponse>(`/grading/subjects/${subjectId}/config`),
+  updateConfig: (subjectId: string, data: Record<string, unknown>) =>
+    api.put<GradeConfigResponse>(`/grading/subjects/${subjectId}/config`, data),
+  listCourseOutcomes: (subjectId: string) =>
+    api.get<CourseOutcomeResponse[]>(`/grading/subjects/${subjectId}/course-outcomes`),
+  addCourseOutcome: (subjectId: string, data: { code: string; description?: string }) =>
+    api.post<CourseOutcomeResponse>(`/grading/subjects/${subjectId}/course-outcomes`, data),
+
+  uploadBatch: (examId: string, files: File[], pagesPerStudent?: number) => {
+    const fd = new FormData()
+    files.forEach((f) => fd.append('files', f))
+    if (pagesPerStudent) fd.append('pages_per_student', String(pagesPerStudent))
+    return api.post<AnswerSheetSummary[]>(`/grading/exams/${examId}/answer-sheets/batch`, fd)
+  },
+  uploadSingle: (examId: string, file: File, studentId?: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    if (studentId) fd.append('student_id', studentId)
+    return api.post<AnswerSheetSummary>(`/grading/exams/${examId}/answer-sheets`, fd)
+  },
+  listSheets: (examId: string) =>
+    api.get<AnswerSheetSummary[]>(`/grading/exams/${examId}/answer-sheets`),
+  getSheet: (sheetId: string) => api.get<AnswerSheetDetail>(`/grading/answer-sheets/${sheetId}`),
+  setMatch: (sheetId: string, studentId: string | null) =>
+    api.patch<AnswerSheetSummary>(`/grading/answer-sheets/${sheetId}/match`, { student_id: studentId }),
+  regrade: (sheetId: string, force = false) =>
+    api.post<{ status: string }>(`/grading/answer-sheets/${sheetId}/regrade?force=${force}`),
+  finalizeSheet: (sheetId: string, force = false) =>
+    api.post<AnswerSheetSummary>(`/grading/answer-sheets/${sheetId}/finalize?force=${force}`),
+  finalizeAll: (examId: string) =>
+    api.post<{ finalized: number }>(`/grading/exams/${examId}/finalize-all`),
+  reviewQueue: (examId: string) =>
+    api.get<ReviewQueueItem[]>(`/grading/exams/${examId}/review-queue`),
+  overrideGrade: (gradeId: string, teacherMarks: number, note?: string) =>
+    api.patch(`/grading/question-grades/${gradeId}`, { teacher_marks: teacherMarks, teacher_note: note }),
+  attainment: (examId: string) =>
+    api.get<ExamAttainmentResponse>(`/grading/exams/${examId}/attainment`),
+
+  // Auto Marks Assigner: scan booklet cover pages → record CO marks.
+  scanCover: (examId: string, files: File[]) => {
+    const fd = new FormData()
+    files.forEach((f) => fd.append('files', f))
+    return api.post<CoverScanResult[]>(`/grading/exams/${examId}/cover-marks`, fd)
+  },
+  // Manually save marks for a student (used for unmatched cover scans).
+  enterResults: (examId: string, results: ManualResultEntry[]) =>
+    api.post<{ entered: number }>(`/grading/exams/${examId}/results/bulk`, { results }),
+
+  pageUrl: (sheetId: string, idx: number) =>
+    `${API_BASE_URL}/grading/answer-sheets/${sheetId}/pages/${idx}`,
+}
+
+// ── Grades (student transcript + teacher class overview) ──
+export const gradesApi = {
+  me: () => api.get<TranscriptResponse>('/grades/me'),
+  classOverview: (subjectId: string) =>
+    api.get<ClassGradeOverview>(`/grades/class?subject_id=${subjectId}`),
 }
 
 // ── Document CRUD ──
@@ -411,6 +529,12 @@ export const quizzesApi = {
 
   submitAttempt: (quizId: string, data: QuizAttemptCreate) =>
     api.post<QuizAttemptResponse>(`/quizzes/${quizId}/attempts`, data),
+  startAttempt: (quizId: string) =>
+    api.post<StartAttemptResponse>(`/quizzes/${quizId}/attempts/start`),
+  recordProctorEvent: (quizId: string, event: ProctorEventIn) =>
+    api.post<void>(`/quizzes/${quizId}/proctor-events`, event),
+  proctorReport: (quizId: string) =>
+    api.get<ProctorReport>(`/quizzes/${quizId}/proctor-report`),
   myAttempts: (subjectId?: string) => {
     const query = subjectId ? `?subject_id=${encodeURIComponent(subjectId)}` : ''
     return api.get<AttemptHistoryRow[]>(`/quizzes/attempts/me${query}`)
@@ -566,13 +690,7 @@ export const communityApi = {
   acceptAnswer: (id: string) => api.post<DoubtAnswerResponse>(`/community/answers/${id}/accept`),
 }
 
-// ── Mock Interview Text Mode (Phase 16, F9) + Voice Mode (Phase 20) ──
-
-export interface VoiceTurnUploadOptions {
-  sessionId: string
-  audioBlob: Blob
-  browserTranscript?: string | null
-}
+// ── Mock Interview — Text Mode (Phase 16) + Live Voice Mode (ElevenLabs Agents) ──
 
 export const interviewsApi = {
   start: (data: InterviewStartRequest) =>
@@ -583,24 +701,22 @@ export const interviewsApi = {
   end: (id: string) => api.post<InterviewSessionResponse>(`/interviews/${id}/end`),
   listMine: () => api.get<InterviewSessionListRow[]>('/interviews/me'),
 
-  // ── Phase 20 — voice mode ──
+  // ── Voice mode — live ElevenLabs conversational agent ──
   voiceCapabilities: () =>
     api.get<VoiceCapabilitiesResponse>('/interviews/voice/capabilities'),
 
-  // Uploads one audio turn as multipart/form-data. The browser_transcript
-  // field is optional — include it when the client has already transcribed
-  // via the Web Speech API so the server doesn't need to call Whisper.
-  sendVoice: ({ sessionId, audioBlob, browserTranscript }: VoiceTurnUploadOptions) => {
-    const formData = new FormData()
-    formData.append('audio', audioBlob, 'answer.webm')
-    if (browserTranscript && browserTranscript.trim()) {
-      formData.append('browser_transcript', browserTranscript.trim())
-    }
-    return api.post<InterviewVoiceTurnResponse>(
-      `/interviews/${sessionId}/voice`,
-      formData,
-    )
-  },
+  // Mint a signed agent URL + per-round overrides to open a live round.
+  liveRoundStart: (sessionId: string, round: number) =>
+    api.post<LiveRoundStartResponse>(
+      `/interviews/${sessionId}/live/rounds/${round}/start`,
+    ),
+
+  // End a live round; the server grades its transcript in the background.
+  liveRoundFinalize: (sessionId: string, round: number, conversationId: string) =>
+    api.post<LiveRoundFinalizeResponse>(
+      `/interviews/${sessionId}/live/rounds/${round}/finalize`,
+      { conversation_id: conversationId },
+    ),
 }
 
 // ── Confidence Coach (Phase 20, F11) ──
@@ -661,6 +777,8 @@ export const codingApi = {
     const q = params.toString()
     return api.get<ProblemListItem[]>(`/coding/problems${q ? '?' + q : ''}`)
   },
+  listPatterns: () => api.get<PatternListItem[]>('/coding/patterns'),
+  getPattern: (slug: string) => api.get<PatternWithProblems>(`/coding/patterns/${slug}`),
   getProblem: (slug: string) => api.get<ProblemDetail>(`/coding/problems/${slug}`),
   getRunnerPayload: (slug: string) =>
     api.get<ProblemRunnerPayload>(`/coding/problems/${slug}/runner`),

@@ -9,6 +9,8 @@ from app.api.deps import ClaudeRateLimited, CurrentUser, DbSession, require_role
 from app.models.quiz import Difficulty
 from app.schemas.quiz import (
     AttemptHistoryRow,
+    ProctorEventIn,
+    ProctorReport,
     QuizAttemptCreate,
     QuizAttemptResponse,
     QuizForStudent,
@@ -16,6 +18,7 @@ from app.schemas.quiz import (
     QuizGenerateRequest,
     QuizResponse,
     QuizUpdate,
+    StartAttemptResponse,
     WeakAreaResponse,
 )
 from app.services import quiz as quiz_service
@@ -114,6 +117,11 @@ def generate_quiz(
         num_questions=data.num_questions,
         difficulty=difficulty,
         topic_hint=data.topic_hint,
+        mode=data.mode,
+        total_marks_target=data.total_marks_target,
+        cie_component=data.cie_component,
+        requires_proctoring=data.requires_proctoring,
+        time_limit_minutes=data.time_limit_minutes,
     )
     return quiz_service.get_quiz_for_teacher(db, quiz.id, current_user)
 
@@ -169,6 +177,34 @@ def delete_quiz(
 # ════════════════════════════════════════════════════════════════
 
 @router.post(
+    "/{quiz_id}/attempts/start",
+    response_model=StartAttemptResponse,
+    summary="Student: begin a (proctored) attempt — server-stamped timer anchor",
+)
+def start_attempt(quiz_id: uuid.UUID, db: DbSession, current_user: CurrentUser) -> StartAttemptResponse:
+    return quiz_service.start_attempt(db, quiz_id=quiz_id, user=current_user)
+
+
+@router.post(
+    "/{quiz_id}/proctor-events",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Student: log a proctoring event during a proctored attempt",
+)
+def proctor_event(quiz_id: uuid.UUID, event: ProctorEventIn, db: DbSession, current_user: CurrentUser) -> None:
+    quiz_service.record_proctor_event(db, quiz_id=quiz_id, user=current_user, event=event)
+
+
+@router.get(
+    "/{quiz_id}/proctor-report",
+    response_model=ProctorReport,
+    dependencies=[Depends(require_role("teacher", "admin"))],
+    summary="Teacher: per-student proctoring + marks report",
+)
+def proctor_report(quiz_id: uuid.UUID, db: DbSession, current_user: CurrentUser) -> ProctorReport:
+    return quiz_service.get_proctor_report(db, quiz_id, current_user)
+
+
+@router.post(
     "/{quiz_id}/attempts",
     response_model=QuizAttemptResponse,
     status_code=status.HTTP_201_CREATED,
@@ -186,4 +222,7 @@ def submit_attempt(
         user=current_user,
         answers=data.answers,
         time_taken_seconds=data.time_taken_seconds,
+        started_attempt_id=data.started_attempt_id,
+        proctor=data.proctor,
+        violations=data.violations,
     )

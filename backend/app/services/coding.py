@@ -12,12 +12,14 @@ import uuid
 from typing import Literal
 
 from fastapi import HTTPException, status as http_status
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.coding import (
     CodingDifficulty,
     CodingLanguage,
+    CodingPattern,
     CodingProblem,
     CodingSubmission,
     CodingSubmissionStatus,
@@ -25,12 +27,27 @@ from app.models.coding import (
 from app.models.gamification import XPEventType
 from app.models.user import User
 from app.services import coding_skill_mastery
-from app.services import coding_problems_seed
+from app.services import dsa_curriculum_seed
 from app.services import xp as xp_service
 
 logger = logging.getLogger(__name__)
 
 UserProblemStatus = Literal["solved", "attempted", "unsolved"]
+
+
+def ensure_seeded(db: Session) -> None:
+    """Seed the in-app-judge problems + the full pattern curriculum on first
+    access. Idempotent — `dsa_curriculum_seed` ensures the judge problems first,
+    then patterns + curriculum problems, gated on the patterns table.
+
+    When `settings.seed_dsa_curriculum` is False (tests), only the 5 in-app-judge
+    problems are seeded so the coding suite stays deterministic."""
+    if get_settings().seed_dsa_curriculum:
+        dsa_curriculum_seed.seed_if_empty(db)
+    else:
+        from app.services import coding_problems_seed
+
+        coding_problems_seed.seed_if_empty(db)
 
 
 def _leetcode_url(problem: CodingProblem) -> str:
@@ -53,10 +70,13 @@ def _per_user_statuses(db: Session, user: User) -> dict[uuid.UUID, UserProblemSt
     rows = db.execute(
         select(
             CodingSubmission.problem_id,
+            # Postgres has no max(boolean) — aggregate an int instead (1 when
+            # passed). Works on both SQLite and Postgres; truthy => "any passed".
             func.max(
-                # 'passed' > 'failed' > 'error' lexicographically, but we want
-                # "any passed" to dominate. Compute as a boolean aggregate.
-                CodingSubmission.status == CodingSubmissionStatus.PASSED
+                case(
+                    (CodingSubmission.status == CodingSubmissionStatus.PASSED, 1),
+                    else_=0,
+                )
             ),
         )
         .where(CodingSubmission.user_id == user.id)
@@ -78,7 +98,7 @@ def list_problems(
 ) -> list[dict]:
     """Return list rows, applying filters. Seeds problems on first read."""
     # Lazy seed — same pattern as skill_graph.seed_if_empty.
-    coding_problems_seed.seed_if_empty(db)
+    ensure_seeded(db)
 
     stmt = select(CodingProblem).order_by(CodingProblem.difficulty, CodingProblem.title)
     if difficulty is not None:
@@ -119,6 +139,105 @@ def list_problems(
 
 
 # ──────────────────────────────────────────────────────────────────
+# Patterns (Phase 2 curriculum)
+# ──────────────────────────────────────────────────────────────────
+
+
+def _pattern_progress(db: Session, user: User) -> tuple[dict, dict]:
+    """Return (total_by_pattern_id, solved_by_pattern_id) for the current user."""
+    statuses = _per_user_statuses(db, user)
+    rows = db.execute(
+        select(CodingProblem.pattern_id, CodingProblem.id).where(
+            CodingProblem.pattern_id.isnot(None)
+        )
+    ).all()
+    total: dict = {}
+    solved: dict = {}
+    for pattern_id, problem_id in rows:
+        total[pattern_id] = total.get(pattern_id, 0) + 1
+        if statuses.get(problem_id) == "solved":
+            solved[pattern_id] = solved.get(pattern_id, 0) + 1
+    return total, solved
+
+
+def list_patterns(db: Session, user: User) -> list[dict]:
+    """All curriculum patterns in curriculum order, with live per-user counts."""
+    ensure_seeded(db)
+    patterns = list(
+        db.scalars(select(CodingPattern).order_by(CodingPattern.order_num)).all()
+    )
+    total, solved = _pattern_progress(db, user)
+    return [
+        {
+            "slug": p.slug,
+            "name": p.name,
+            "track": p.track,
+            "tier": p.tier,
+            "order_num": p.order_num,
+            "core_idea": p.core_idea,
+            "recognize_when": p.recognize_when,
+            "difficulty_span": p.difficulty_span,
+            "problem_count": total.get(p.id, p.problem_count),
+            "solved_count": solved.get(p.id, 0),
+        }
+        for p in patterns
+    ]
+
+
+def get_pattern_with_problems(db: Session, user: User, slug: str) -> dict:
+    """A single pattern + its problems (ordered easy->hard by seq), with status."""
+    ensure_seeded(db)
+    pattern = db.scalar(select(CodingPattern).where(CodingPattern.slug == slug))
+    if pattern is None:
+        raise HTTPException(status_code=404, detail="Pattern not found")
+
+    problems = list(
+        db.scalars(
+            select(CodingProblem)
+            .where(CodingProblem.pattern_id == pattern.id)
+            .order_by(CodingProblem.seq, CodingProblem.title)
+        ).all()
+    )
+    statuses = _per_user_statuses(db, user)
+
+    rows: list[dict] = []
+    solved = 0
+    for p in problems:
+        status: UserProblemStatus = statuses.get(p.id, "unsolved")
+        if status == "solved":
+            solved += 1
+        rows.append(
+            {
+                "id": p.id,
+                "slug": p.slug,
+                "title": p.title,
+                "difficulty": p.difficulty.value,
+                "seq": p.seq,
+                "lc_number": p.lc_number,
+                "priority": p.priority,
+                "is_premium": p.is_premium,
+                "also_appears_in": p.also_appears_in,
+                "leetcode_url": _leetcode_url(p),
+                "has_editor": p.source == "seed_inapp" and bool(p.starter_code),
+                "user_status": status,
+            }
+        )
+
+    return {
+        "slug": pattern.slug,
+        "name": pattern.name,
+        "track": pattern.track,
+        "tier": pattern.tier,
+        "core_idea": pattern.core_idea,
+        "recognize_when": pattern.recognize_when,
+        "difficulty_span": pattern.difficulty_span,
+        "problem_count": len(problems),
+        "solved_count": solved,
+        "problems": rows,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────
 # Get one
 # ──────────────────────────────────────────────────────────────────
 
@@ -144,10 +263,16 @@ def _has_accepted(db: Session, user: User, problem_id: uuid.UUID) -> bool:
 def get_problem(db: Session, user: User, slug: str) -> dict:
     """Detail view. Excludes hidden test cases and reference solution unless
     the user has already AC'd the problem."""
+    ensure_seeded(db)
     problem = _get_by_slug_or_404(db, slug)
     accepted = _has_accepted(db, user, problem.id)
     statuses = _per_user_statuses(db, user)
     user_status: UserProblemStatus = statuses.get(problem.id, "unsolved")
+
+    pattern = db.get(CodingPattern, problem.pattern_id) if problem.pattern_id else None
+    # The in-app Pyodide editor only makes sense for the seed_inapp problems that
+    # ship with starter code + test cases. Curriculum problems are LeetCode-only.
+    has_editor = problem.source == "seed_inapp" and bool(problem.starter_code)
 
     return {
         "id": problem.id,
@@ -167,6 +292,14 @@ def get_problem(db: Session, user: User, slug: str) -> dict:
         "skill_node_names": problem.skill_node_names or [],
         "leetcode_url": _leetcode_url(problem),
         "user_status": user_status,
+        # Phase 2 curriculum context
+        "source": problem.source,
+        "has_editor": has_editor,
+        "lc_number": problem.lc_number,
+        "priority": problem.priority,
+        "is_premium": problem.is_premium,
+        "pattern_slug": pattern.slug if pattern else None,
+        "pattern_name": pattern.name if pattern else None,
     }
 
 
@@ -331,7 +464,7 @@ def list_submissions(db: Session, user: User, slug: str) -> list[CodingSubmissio
 
 def get_stats(db: Session, user: User) -> dict:
     """Aggregate stats for /coding/stats — used by the list page banner."""
-    coding_problems_seed.seed_if_empty(db)
+    ensure_seeded(db)
 
     # Total problems available (after seed).
     total_problems = db.scalar(select(func.count(CodingProblem.id))) or 0

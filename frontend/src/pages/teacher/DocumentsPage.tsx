@@ -3,7 +3,7 @@ import { motion, type Variants } from 'framer-motion'
 import {
   Upload, FileText, Trash2, Download, AlertCircle, Loader2, FolderOpen,
 } from 'lucide-react'
-import { Badge, Button, Card, CardHeader, CardTitle, Select } from '../../components/ui'
+import { Badge, Button, Card, CardHeader, CardTitle, Select, ResponsiveTable, type ResponsiveColumn } from '../../components/ui'
 import { documentsApi, subjectsApi, ApiError } from '../../api/client'
 import type { DocumentProcessingStatus, DocumentWithSubject, Subject } from '../../types'
 
@@ -202,6 +202,104 @@ export default function DocumentsPage() {
     ? documents
     : documents.filter((d) => d.subject_id === filter)
 
+  const docColumns: ResponsiveColumn<DocumentWithSubject>[] = [
+    {
+      key: 'file_name',
+      header: 'File Name',
+      primary: true,
+      render: (doc) => (
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-[var(--text-tertiary)] shrink-0" />
+          <div className="min-w-0">
+            <div className="font-medium text-[var(--text-primary)] truncate" title={doc.title}>{doc.title}</div>
+            <div className="text-[11px] text-[var(--text-tertiary)]">
+              {formatDate(doc.created_at)} · {formatBytes(doc.file_size_bytes)}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'subject',
+      header: 'Subject',
+      className: 'text-[var(--text-secondary)]',
+      render: (doc) => <span className="font-mono text-xs">{doc.subject_code}</span>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (doc) => (
+        <Badge variant={statusVariant[doc.processing_status]} size="sm" dot>
+          {statusLabel[doc.processing_status]}
+        </Badge>
+      ),
+    },
+    {
+      key: 'original',
+      header: 'Original',
+      headerClassName: 'text-right',
+      className: 'text-right text-[var(--text-secondary)] tabular-nums',
+      render: (doc) => {
+        const stats = doc.compression_stats
+        return stats && stats.chunk_count > 0 ? formatBytes(stats.original_bytes) : '—'
+      },
+    },
+    {
+      key: 'compressed',
+      header: 'Compressed',
+      headerClassName: 'text-right',
+      className: 'text-right text-[var(--text-secondary)] tabular-nums',
+      render: (doc) => {
+        const stats = doc.compression_stats
+        return stats && stats.chunk_count > 0 ? formatBytes(stats.compressed_bytes) : '—'
+      },
+    },
+    {
+      key: 'savings',
+      header: 'Savings',
+      headerClassName: 'text-right',
+      className: 'text-right font-medium text-[var(--text-primary)] tabular-nums',
+      render: (doc) => {
+        const stats = doc.compression_stats
+        return stats && stats.chunk_count > 0 ? `${stats.savings_percent.toFixed(1)}%` : '—'
+      },
+    },
+    {
+      key: 'chunks',
+      header: 'Chunks',
+      headerClassName: 'text-right',
+      className: 'text-right text-[var(--text-tertiary)] tabular-nums',
+      render: (doc) => {
+        const stats = doc.compression_stats
+        return stats && stats.chunk_count > 0 ? stats.chunk_count : '—'
+      },
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      headerClassName: 'text-right',
+      render: (doc) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Download}
+            onClick={() => handleDownload(doc)}
+            title="Download"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={deletingId === doc.id ? Loader2 : Trash2}
+            disabled={deletingId === doc.id}
+            onClick={() => void handleDelete(doc)}
+            title="Delete"
+          />
+        </div>
+      ),
+    },
+  ]
+
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
       {/* Upload Zone */}
@@ -249,7 +347,7 @@ export default function DocumentsPage() {
 
       {/* Filter */}
       {subjects.length > 0 && (
-        <motion.div variants={fadeUp} className="w-80">
+        <motion.div variants={fadeUp} className="w-full sm:w-80">
           <Select
             options={subjectOptions}
             value={filter}
@@ -310,85 +408,11 @@ export default function DocumentsPage() {
                 )}
               </CardTitle>
             </CardHeader>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-[var(--border-default)]">
-                    <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">File Name</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">Subject</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">Status</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">Original</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">Compressed</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">Savings</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">Chunks</th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredDocs.map((doc) => {
-                    const stats = doc.compression_stats
-                    const hasStats = stats && stats.chunk_count > 0
-                    return (
-                      <tr
-                        key={doc.id}
-                        className="border-b border-[var(--border-default)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors"
-                      >
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-[var(--text-tertiary)] shrink-0" />
-                            <div className="min-w-0">
-                              <div className="font-medium text-[var(--text-primary)] truncate" title={doc.title}>{doc.title}</div>
-                              <div className="text-[11px] text-[var(--text-tertiary)]">
-                                {formatDate(doc.created_at)} · {formatBytes(doc.file_size_bytes)}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-[var(--text-secondary)]">
-                          <span className="font-mono text-xs">{doc.subject_code}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant={statusVariant[doc.processing_status]} size="sm" dot>
-                            {statusLabel[doc.processing_status]}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-right text-[var(--text-secondary)] tabular-nums">
-                          {hasStats ? formatBytes(stats.original_bytes) : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right text-[var(--text-secondary)] tabular-nums">
-                          {hasStats ? formatBytes(stats.compressed_bytes) : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right font-medium text-[var(--text-primary)] tabular-nums">
-                          {hasStats ? `${stats.savings_percent.toFixed(1)}%` : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right text-[var(--text-tertiary)] tabular-nums">
-                          {hasStats ? stats.chunk_count : '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              icon={Download}
-                              onClick={() => handleDownload(doc)}
-                              title="Download"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              icon={deletingId === doc.id ? Loader2 : Trash2}
-                              disabled={deletingId === doc.id}
-                              onClick={() => void handleDelete(doc)}
-                              title="Delete"
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <ResponsiveTable
+              columns={docColumns}
+              rows={filteredDocs}
+              rowKey={(doc) => doc.id}
+            />
           </Card>
         </motion.div>
       )}

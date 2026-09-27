@@ -112,7 +112,7 @@ export default function DashboardPage() {
 
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
-      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4">
+      <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {data.stats.map((stat, i) => (
           <motion.div
             key={stat.label}
@@ -130,7 +130,7 @@ export default function DashboardPage() {
         ))}
       </motion.div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div variants={fadeUp}>
           <Card>
             <CardHeader>

@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -192,6 +193,50 @@ Scoring guide for hire_verdict:
 
 
 # ════════════════════════════════════════════════════════════════
+# Live voice mode (ElevenLabs Conversational AI) prompts
+# ════════════════════════════════════════════════════════════════
+#
+# In live mode the round is a real-time voice conversation handled by the
+# ElevenLabs agent — so this prompt drives ONLY the conversation, never the
+# scoring. Grading happens afterward from the finished transcript
+# (ROUND_GRADER_SYSTEM below), which is what keeps per-turn latency low.
+
+LIVE_INTERVIEWER_SYSTEM_TEMPLATE = """{persona_voice}
+
+You are conducting a live SPOKEN interview for **{company} — {role}**.
+This is the **{round_name}** round (round {current_round} of 5).
+
+{round_description}
+
+You are talking out loud, so:
+- Keep every turn SHORT — 1 to 3 sentences. No markdown, no lists, no code, no spelled-out symbols.
+- Ask exactly ONE question at a time, then wait for the candidate's full spoken answer.
+- Cover about {q_max} substantive questions this round, with brief, natural follow-ups.
+- React briefly and naturally to each answer, then continue. Stay fully in character.
+- NEVER mention scores, ratings, or evaluation — you only run the conversation; grading is done separately afterward.
+- After roughly {q_max} questions, wrap up in one short sentence (e.g. "Thanks, that's everything for this round.") and stop asking new questions."""
+
+
+ROUND_GRADER_SYSTEM = """You are a rigorous but fair technical interview assessor. You are given the transcript of ONE round of a mock interview.
+
+Score EACH candidate answer from 0 to 10:
+- 0-3: missing, evasive, or wrong.
+- 4-6: partially correct or vague; lacks structure or specifics.
+- 7-8: solid, correct, well-structured.
+- 9-10: excellent — precise, complete, with trade-offs/edge-cases.
+A bare greeting or "I don't know" is ~3-5.
+
+Respond with VALID JSON ONLY (no markdown fences):
+{
+  "answers": [
+    { "index": <0-based index of the candidate answer within this round, as labelled>, "score": <number 0-10>, "reason": "<one short neutral sentence>" }
+  ]
+}
+
+Score every candidate answer labelled in the transcript, in order. If there are no candidate answers, return {"answers": []}."""
+
+
+# ════════════════════════════════════════════════════════════════
 # Helpers
 # ════════════════════════════════════════════════════════════════
 
@@ -250,10 +295,12 @@ def _round_summaries(state: dict, current_round: int, status_str: str) -> list[R
         total = float(state.get("round_scores_sum", {}).get(str(r), 0.0) or 0.0)
         q_asked = int(state.get("round_question_counts", {}).get(str(r), 0) or 0)
         avg = round(total / count, 2) if count > 0 else None
-        if status_str == InterviewStatus.COMPLETED.value:
+        # A round is "completed" once it's actually been graded (rounds can be
+        # run in any order), "active" when it's the one in progress, else
+        # "locked" (= not done yet — any round may still be started).
+        graded = state.get("round_status", {}).get(str(r)) == "done" or count > 0
+        if status_str == InterviewStatus.COMPLETED.value or graded:
             r_status: str = "completed"
-        elif r < current_round:
-            r_status = "completed"
         elif r == current_round:
             r_status = "active"
         else:
@@ -335,7 +382,14 @@ def create_session(
     db.commit()
     db.refresh(session)
 
-    # Seed the opening assistant message with a synthetic persona intro + first question
+    # Live voice mode: the ElevenLabs agent speaks the opener itself (per-round
+    # `first_message`), and each round's transcript is appended only after it's
+    # graded — so the persisted transcript starts empty.
+    if mode == InterviewMode.VOICE:
+        return session
+
+    # Text mode: seed the opening assistant message with a synthetic persona
+    # intro + first question so the chat has content instantly.
     opening = _synthetic_opening(session)
     transcript = _load_transcript(session)
     transcript.append(
@@ -428,21 +482,6 @@ class TurnResult:
     assistant_message: str
     round_transitioned: bool
     interview_completed: bool
-
-
-@dataclass
-class VoiceTurnResult:
-    """Same as TurnResult but with the Whisper transcription of the
-    candidate's audio and an optional TTS audio URL for the interviewer's
-    reply. Either URL may be None if ElevenLabs is unavailable or was
-    intentionally skipped (e.g. the interview just completed)."""
-    session: MockInterviewSession
-    assistant_message: str
-    round_transitioned: bool
-    interview_completed: bool
-    transcribed_text: str
-    assistant_audio_url: str | None
-    assistant_voice_id: str | None
 
 
 def student_turn(
@@ -643,6 +682,10 @@ def _compute_overall_score(state: dict) -> float:
 def complete_and_debrief(
     db: Session, session: MockInterviewSession
 ) -> MockInterviewSession:
+    # Idempotent: the live-mode background grader may call this once the final
+    # round is scored, and /end can race it. Only debrief once.
+    if session.status == InterviewStatus.COMPLETED:
+        return session
     state = _load_state(session)
     overall = _compute_overall_score(state)
     session.overall_score = Decimal(f"{overall:.2f}")
@@ -788,84 +831,348 @@ def _fallback_debrief(round_averages: dict[int, float], overall: float) -> dict:
 
 
 # ════════════════════════════════════════════════════════════════
-# Voice turn — Phase 20
+# Live voice mode — ElevenLabs Conversational AI (Agents)
 # ════════════════════════════════════════════════════════════════
+#
+# Each round is a real-time spoken conversation with one shared ElevenLabs
+# agent, customized per round via startSession overrides. The browser holds the
+# live audio link; the server only (1) mints the signed URL and (2) grades the
+# finished transcript with Claude. Per-round conversation ids + status live in
+# the session `state` JSON, so there's no schema change.
 
 
-def voice_turn(
-    db: Session,
-    user: User,
-    session_id: uuid.UUID,
-    audio_bytes: bytes,
-    *,
-    transcript_override: str | None = None,
-) -> VoiceTurnResult:
-    """Process one voice turn end-to-end.
+def _live_first_message(session: MockInterviewSession, round_number: int) -> str:
+    """The agent's spoken opener for a round. Round 1 greets in-persona; later
+    rounds transition in and pose the round's first question so the candidate
+    always knows what to answer."""
+    company = session.company_target or "the company"
+    if round_number == 1:
+        return _synthetic_opening(session)
+    openers = {
+        2: (
+            "Let's move into the technical round. To start: walk me through how "
+            "you'd reverse a linked list, and tell me its time and space complexity."
+        ),
+        3: (
+            "Now the system design round. At a high level, how would you design a "
+            "URL shortener like bit.ly? Walk me through the main components."
+        ),
+        4: (
+            "Let's talk about working with people. Tell me about a time you "
+            "disagreed with a teammate or manager, and how you handled it."
+        ),
+        5: (
+            f"Final round — the offer conversation for {company}. We'd like to "
+            "extend an offer at the lower end of our band. How do you respond?"
+        ),
+    }
+    return openers.get(round_number, "Let's continue with the next round.")
 
-    Audio → Whisper → `student_turn()` → ElevenLabs TTS of assistant reply.
-    The voice pipeline gracefully degrades when either API key is missing:
 
-    - No OPENAI_API_KEY → the frontend should pass `transcript_override`
-      from the browser's Web Speech API. Without either, we refuse the
-      turn with a 503 since we can't know what the candidate said.
-    - No ELEVENLABS_API_KEY → we skip the TTS step and return audio_url=None.
-      The UI reads the assistant message with the browser's built-in speech
-      synthesis (`speechSynthesis`) as a fallback — free and voice-selectable.
-    """
+def _live_round_overrides(session: MockInterviewSession, round_number: int) -> dict:
+    """Build the per-round agent override payload + display fields."""
+    persona_voice = PERSONA_VOICES.get(
+        session.interviewer_persona, PERSONA_VOICES[InterviewPersona.FRIENDLY]
+    )
+    round_name = ROUND_NAMES.get(round_number, "Interview")
+    system_prompt = LIVE_INTERVIEWER_SYSTEM_TEMPLATE.format(
+        persona_voice=persona_voice,
+        company=session.company_target or "the company",
+        role=session.role_target or "the role",
+        round_name=round_name,
+        current_round=round_number,
+        q_max=QUESTIONS_PER_ROUND,
+        round_description=ROUND_DESCRIPTIONS.get(round_number, ""),
+    )
+    return {
+        "round_number": round_number,
+        "round_name": round_name,
+        "voice_id": speech.VOICE_BY_ROUND.get(round_number, speech.DEFAULT_VOICE_ID),
+        "language": "en",
+        "system_prompt": system_prompt,
+        "first_message": _live_first_message(session, round_number),
+    }
+
+
+def _validate_round(round_number: int) -> None:
+    if round_number < 1 or round_number > TOTAL_ROUNDS:
+        raise HTTPException(status_code=400, detail=f"Invalid round: {round_number}")
+
+
+def _all_rounds_done(session: MockInterviewSession) -> bool:
+    """True once every round has been graded (round_status == 'done')."""
+    rs = _load_state(session).get("round_status", {})
+    return all(rs.get(str(r)) == "done" for r in range(1, TOTAL_ROUNDS + 1))
+
+
+def start_live_round(
+    db: Session, user: User, session_id: uuid.UUID, round_number: int
+) -> dict:
+    """Mint a signed agent URL for a round and return its override payload."""
+    from app.services import elevenlabs_agent
+
     session = get_session(db, session_id, user)
     if session.status != InterviewStatus.IN_PROGRESS:
         raise HTTPException(
             status_code=400, detail="Interview is already completed or abandoned"
         )
-
-    # 1. Obtain the candidate's transcript — browser-provided or Whisper
-    if transcript_override and transcript_override.strip():
-        transcribed = transcript_override.strip()
-    elif speech.is_asr_available():
-        transcribed = speech.transcribe_audio(audio_bytes, filename="interview.webm")
-    else:
+    _validate_round(round_number)
+    if not elevenlabs_agent.is_configured():
         raise HTTPException(
             status_code=503,
             detail=(
-                "Voice interviews need either OPENAI_API_KEY on the server "
-                "or a browser-side transcript. Try a Chrome browser so the "
-                "Web Speech API can transcribe client-side."
+                "Live voice interview is not configured on the server "
+                "(ELEVENLABS_AGENT_ID is unset). Use Text mode instead."
             ),
         )
-
-    if not transcribed.strip():
+    signed_url = elevenlabs_agent.get_signed_url()
+    if not signed_url:
         raise HTTPException(
-            status_code=400,
-            detail=(
-                "We couldn't hear your answer clearly. Try recording again "
-                "in a quieter room or speaking a bit louder."
-            ),
+            status_code=503,
+            detail="Could not start the voice agent. Please try again or use Text mode.",
         )
 
-    # 2. Route through the existing text state machine — same scoring, same
-    # round logic, same debrief hook. Voice mode is purely a transport layer.
-    text_result = student_turn(db, user, session_id, transcribed)
+    # Advance the session to this round and mark it live.
+    state = _load_state(session)
+    state.setdefault("round_status", {})[str(round_number)] = "live"
+    session.current_round = round_number
+    session.state = state
+    flag_modified(session, "state")
+    db.commit()
 
-    # 3. TTS the assistant's reply (best-effort)
-    audio_url: str | None = None
-    voice_id: str | None = None
-    if not text_result.interview_completed and speech.is_tts_available():
-        tts = speech.synthesize_and_save(
-            text_result.assistant_message,
-            round_number=text_result.session.current_round,
-        )
-        if tts is not None:
-            audio_url, voice_id = tts
+    payload = _live_round_overrides(session, round_number)
+    payload["signed_url"] = signed_url
+    return payload
 
-    return VoiceTurnResult(
-        session=text_result.session,
-        assistant_message=text_result.assistant_message,
-        round_transitioned=text_result.round_transitioned,
-        interview_completed=text_result.interview_completed,
-        transcribed_text=transcribed,
-        assistant_audio_url=audio_url,
-        assistant_voice_id=voice_id,
+
+def finalize_live_round(
+    db: Session,
+    user: User,
+    session_id: uuid.UUID,
+    round_number: int,
+    conversation_id: str,
+    background_tasks,
+) -> tuple[MockInterviewSession, bool, bool]:
+    """Record a finished round's conversation id and schedule its grading.
+
+    Returns (session, grading_scheduled, interview_completing). Grading runs in
+    the background; the final round's grade triggers the debrief.
+    """
+    session = get_session(db, session_id, user)
+    if session.status != InterviewStatus.IN_PROGRESS:
+        # Already finalized / ended — nothing to do.
+        return session, False, False
+    _validate_round(round_number)
+
+    state = _load_state(session)
+    state.setdefault("round_conversations", {})[str(round_number)] = conversation_id
+    state.setdefault("round_status", {})[str(round_number)] = "grading"
+    session.state = state
+    flag_modified(session, "state")
+    db.commit()
+    db.refresh(session)
+
+    background_tasks.add_task(
+        _grade_round_bg, session_id, round_number, conversation_id
     )
+    # "Completing" when this is the last of the 5 distinct rounds to be run (in
+    # any order) — i.e. every round is now finalized (grading or done).
+    round_status = state.get("round_status", {})
+    finalized = sum(
+        1
+        for r in range(1, TOTAL_ROUNDS + 1)
+        if round_status.get(str(r)) in ("grading", "done")
+    )
+    interview_completing = finalized >= TOTAL_ROUNDS
+    return session, True, interview_completing
+
+
+# Serialize grading per session so two rounds finalized close together can't
+# race on the same session row (lost update on transcript/state). The slow
+# transcript poll happens *outside* the lock; only the read-modify-write is
+# serialized. Mirrors the per-exam lock in answersheet_grader.
+_session_grade_locks: dict[str, threading.Lock] = {}
+_session_grade_locks_guard = threading.Lock()
+
+
+def _session_grade_lock(session_id: uuid.UUID) -> threading.Lock:
+    key = str(session_id)
+    with _session_grade_locks_guard:
+        lock = _session_grade_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _session_grade_locks[key] = lock
+        return lock
+
+
+def _grade_round_bg(
+    session_id: uuid.UUID, round_number: int, conversation_id: str
+) -> None:
+    """Background task: pull the round transcript from ElevenLabs and score it.
+
+    Opens its own DB session (the test suite repoints SessionLocal, so import it
+    inside the function). Writes the round's turns + per-answer scores into the
+    session, then triggers the debrief after the final round.
+    """
+    from app.core.database import SessionLocal
+    from app.services import elevenlabs_agent
+
+    try:
+        # Slow, DB-free work first — fetch the finished transcript.
+        convo = elevenlabs_agent.poll_conversation_until_done(conversation_id)
+        turns = elevenlabs_agent.extract_transcript_turns(convo)
+
+        # Serialize the grade + write per session (reload inside the lock so we
+        # see any sibling round that committed while we were polling).
+        with _session_grade_lock(session_id):
+            db = SessionLocal()
+            try:
+                session = db.get(MockInterviewSession, session_id)
+                if session is None:
+                    return
+                scores = _grade_round_transcript(session, round_number, turns)
+                _apply_round_result(
+                    db, session, round_number, turns, scores, conversation_id
+                )
+                # Auto-finish once every round has been graded (any order). A
+                # partial interview is finished explicitly via /end instead.
+                if _all_rounds_done(session):
+                    complete_and_debrief(db, session)
+            finally:
+                db.close()
+    except Exception:  # noqa: BLE001 - a grading failure must not crash the worker
+        logger.exception("Live round grading failed (round %s)", round_number)
+
+
+def _grade_round_transcript(
+    session: MockInterviewSession, round_number: int, turns: list[dict]
+) -> dict[int, dict]:
+    """Score each candidate answer in a round via Claude. Returns
+    {candidate_answer_index: {"score": float, "reason": str|None}}; empty on
+    failure (the round then records unscored turns)."""
+    candidate_answers = [t for t in turns if t["role"] == "user"]
+    if not candidate_answers or not claude_client.is_available():
+        return {}
+
+    lines: list[str] = []
+    answer_idx = 0
+    for t in turns:
+        if t["role"] == "assistant":
+            lines.append(f"Interviewer: {t['content'][:500]}")
+        else:
+            lines.append(f"Candidate answer [{answer_idx}]: {t['content'][:800]}")
+            answer_idx += 1
+
+    user_message = (
+        f"Company: {session.company_target}\n"
+        f"Role: {session.role_target}\n"
+        f"Persona: {session.interviewer_persona.value}\n"
+        f"Round: {ROUND_NAMES.get(round_number, round_number)}\n\n"
+        "=== ROUND TRANSCRIPT ===\n" + "\n".join(lines)
+    )
+
+    raw = claude_client.generate_completion(
+        system=ROUND_GRADER_SYSTEM,
+        user_message=user_message,
+        max_tokens=700,
+        temperature=0.3,
+    )
+    if not raw:
+        return {}
+    try:
+        data = _parse_first_json_object(raw)
+    except json.JSONDecodeError:
+        return {}
+
+    out: dict[int, dict] = {}
+    for item in data.get("answers") or []:
+        try:
+            idx = int(item.get("index"))
+            score = float(item.get("score"))
+        except (TypeError, ValueError):
+            continue
+        out[idx] = {
+            "score": max(0.0, min(10.0, round(score, 2))),
+            "reason": str(item.get("reason") or "").strip() or None,
+        }
+    return out
+
+
+def _apply_round_result(
+    db: Session,
+    session: MockInterviewSession,
+    round_number: int,
+    turns: list[dict],
+    scores: dict[int, dict],
+    conversation_id: str,
+) -> None:
+    """Write a graded round's turns into the transcript and update round state.
+
+    Rounds may be run in any order and re-run, so this **replaces** the round:
+    any prior turns/scores for `round_number` are dropped first, the aggregates
+    are set (not accumulated), and the transcript is kept grouped by round."""
+    state = _load_state(session)
+    # Drop any previous attempt of this round.
+    transcript = [
+        t for t in _load_transcript(session)
+        if int(t.get("round_number", 0)) != round_number
+    ]
+
+    score_sum = 0.0
+    score_count = 0
+    question_count = 0
+    answer_idx = 0
+    new_turns: list[dict] = []
+    for t in turns:
+        if t["role"] == "assistant":
+            question_count += 1
+            new_turns.append(
+                {
+                    "role": "assistant",
+                    "content": t["content"],
+                    "round_number": round_number,
+                    "score": None,
+                    "score_reason": None,
+                    "is_round_transition": question_count == 1,
+                }
+            )
+        else:
+            graded = scores.get(answer_idx)
+            score_val = graded["score"] if graded else None
+            reason = graded["reason"] if graded else None
+            new_turns.append(
+                {
+                    "role": "user",
+                    "content": t["content"],
+                    "round_number": round_number,
+                    "score": score_val,
+                    "score_reason": reason,
+                    "is_round_transition": False,
+                }
+            )
+            if score_val is not None:
+                score_sum += score_val
+                score_count += 1
+            answer_idx += 1
+
+    transcript.extend(new_turns)
+    # Keep the transcript grouped by round ascending (stable sort preserves the
+    # within-round order) so it reads 1→5 regardless of completion order.
+    transcript.sort(key=lambda t: int(t.get("round_number", 0)))
+
+    r = str(round_number)
+    state.setdefault("round_scores_sum", {})[r] = score_sum
+    state.setdefault("round_scores_count", {})[r] = score_count
+    state.setdefault("round_question_counts", {})[r] = question_count
+    state.setdefault("round_status", {})[r] = "done"
+    state.setdefault("round_conversations", {})[r] = conversation_id
+
+    session.transcript = transcript
+    session.state = state
+    flag_modified(session, "transcript")
+    flag_modified(session, "state")
+    db.commit()
+    db.refresh(session)
 
 
 def end_session(

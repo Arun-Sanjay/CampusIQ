@@ -12,6 +12,7 @@ import Card, { CardHeader, CardTitle } from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
+import { ResponsiveTable, type ResponsiveColumn } from '../../components/ui'
 import StatCard from '../../components/dashboard/StatCard'
 import { ApiError, algorithmsApi, quizzesApi } from '../../api/client'
 import type {
@@ -78,6 +79,47 @@ export default function SimilarityCheckerPage() {
     { value: '3', label: 'Distance ≤ 3 (similar)' },
   ]
 
+  const pairColumns: ResponsiveColumn<HammingPairResponse>[] = [
+    {
+      key: 'student_a',
+      header: 'Student A',
+      primary: true,
+      className: 'text-[var(--text-primary)] font-medium',
+      render: (pair) => pair.student_a_name,
+    },
+    {
+      key: 'student_b',
+      header: 'Student B',
+      className: 'text-[var(--text-primary)] font-medium',
+      render: (pair) => pair.student_b_name,
+    },
+    {
+      key: 'hamming',
+      header: 'Hamming Δ',
+      headerClassName: 'text-right',
+      className: 'text-right tabular-nums',
+      render: (pair) => (
+        <Badge variant={severityVariant(pair.hamming_distance)} size="sm">
+          {pair.hamming_distance}
+        </Badge>
+      ),
+    },
+    {
+      key: 'similarity',
+      header: 'Similarity',
+      headerClassName: 'text-right',
+      className: 'text-right font-semibold text-danger tabular-nums',
+      render: (pair) => `${pair.similarity_percent.toFixed(0)}%`,
+    },
+    {
+      key: 'length',
+      header: 'Length',
+      headerClassName: 'text-right',
+      className: 'text-right text-[var(--text-tertiary)] tabular-nums',
+      render: (pair) => `${pair.answer_length} Q`,
+    },
+  ]
+
   const runCheck = async () => {
     if (!selectedQuizId) return
     setRunning(true)
@@ -118,7 +160,7 @@ export default function SimilarityCheckerPage() {
       )}
 
       <motion.div variants={fadeUp} className="flex flex-wrap items-end gap-3">
-        <div className="w-80">
+        <div className="w-full sm:w-80">
           <Select
             label="Select Quiz"
             options={[{ value: '', label: 'Pick a quiz…' }, ...quizOptions]}
@@ -127,7 +169,7 @@ export default function SimilarityCheckerPage() {
             disabled={loading}
           />
         </div>
-        <div className="w-64">
+        <div className="w-full sm:w-64">
           <Select
             label="Threshold"
             options={distanceOptions}
@@ -153,7 +195,7 @@ export default function SimilarityCheckerPage() {
 
       {result && (
         <>
-          <motion.div variants={fadeUp} className="grid grid-cols-3 gap-4">
+          <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <StatCard
               label="TOTAL ATTEMPTS"
               value={String(result.total_attempts)}
@@ -180,62 +222,17 @@ export default function SimilarityCheckerPage() {
                   </Badge>
                 )}
               </div>
-              {result.flagged_pairs.length === 0 ? (
-                <p className="text-sm text-[var(--text-tertiary)] text-center py-6">
-                  No suspicious pairs at this threshold. Either the cohort is honest or the
-                  threshold is too tight.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--border-default)]">
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Student A
-                        </th>
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Student B
-                        </th>
-                        <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Hamming Δ
-                        </th>
-                        <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Similarity
-                        </th>
-                        <th className="text-right px-4 py-3 text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Length
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.flagged_pairs.map((pair: HammingPairResponse, i) => (
-                        <tr
-                          key={i}
-                          className="border-b border-[var(--border-default)] last:border-0 hover:bg-[var(--bg-secondary)]"
-                        >
-                          <td className="px-4 py-3 text-[var(--text-primary)] font-medium">
-                            {pair.student_a_name}
-                          </td>
-                          <td className="px-4 py-3 text-[var(--text-primary)] font-medium">
-                            {pair.student_b_name}
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums">
-                            <Badge variant={severityVariant(pair.hamming_distance)} size="sm">
-                              {pair.hamming_distance}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold text-danger tabular-nums">
-                            {pair.similarity_percent.toFixed(0)}%
-                          </td>
-                          <td className="px-4 py-3 text-right text-[var(--text-tertiary)] tabular-nums">
-                            {pair.answer_length} Q
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <ResponsiveTable
+                columns={pairColumns}
+                rows={result.flagged_pairs}
+                rowKey={(pair) => `${pair.student_a_name}|${pair.student_b_name}|${pair.hamming_distance}`}
+                empty={
+                  <p className="text-sm text-[var(--text-tertiary)] text-center py-6">
+                    No suspicious pairs at this threshold. Either the cohort is honest or the
+                    threshold is too tight.
+                  </p>
+                }
+              />
             </Card>
           </motion.div>
         </>

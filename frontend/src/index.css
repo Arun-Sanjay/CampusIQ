@@ -120,14 +120,20 @@
   /* Selection accent matches the violet hero gradient. */
   .nebula ::selection { background: rgba(167, 139, 250, 0.25); }
 
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
-    @apply min-h-screen antialiased;
+    @apply min-h-dvh antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background-color: var(--bg-primary);
     color: var(--text-primary);
+    overscroll-behavior-y: none;
   }
 
-  #root { @apply min-h-screen; }
+  #root { @apply min-h-dvh; }
 
   /* Scrollbar */
   ::-webkit-scrollbar { @apply w-1.5; }
@@ -193,6 +199,9 @@
     mix-blend-mode: overlay;
   }
 
+  /* Mermaid diagrams must never exceed their container on mobile. */
+  .mermaid-host svg { max-width: 100%; height: auto; }
+
 }
 
 @layer utilities {
@@ -214,6 +223,13 @@
     50% { box-shadow: 0 0 40px var(--glow-color); }
   }
 
+  /* ── Mobile foundations ── */
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+  .tap-target { min-height: 44px; min-width: 44px; }
+  .scroll-touch { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 }
 
 @media print {

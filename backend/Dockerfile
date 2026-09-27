@@ -27,7 +27,11 @@ WORKDIR /app
 # Cache deps separately from app code so requirement-only changes don't
 # bust the whole image.
 COPY requirements.txt ./
+# Install the CPU-only Torch wheel first (no NVIDIA/CUDA deps) so the image is
+# ~1.5GB instead of ~6GB — faster builds + cold starts. requirements.txt's
+# `torch==2.10.0` is then already satisfied and won't pull the CUDA build.
 RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
 # ── Runtime stage ──

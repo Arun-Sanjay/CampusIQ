@@ -6,6 +6,15 @@
 > on LeetCode** via a browser extension so it can help where students actually
 > grind.
 
+## Status
+> - **Part A — Curriculum + pattern UI: ✅ DONE & verified.** 38 patterns / 376
+>   problems imported from `dsa_curriculum.xlsx` → `app/services/dsa_curriculum.json`,
+>   seeded via `dsa_curriculum_seed.py` (migration 000000000006, `coding_patterns`
+>   table + curriculum columns). Pattern-box grid → pattern problem list → problem
+>   detail (coach + Open-on-LeetCode; in-app editor kept only for the 5 judge
+>   problems). 90 backend tests pass; browser E2E green.
+> - **Part B — Chrome extension: ⏳ pending.** Not started.
+
 ## What Phase 1 already gives us (reuse, don't rebuild)
 
 - `chat_type = 'dsa_coach'` sessions bound to a problem (`chat_sessions.coding_problem_id`), with `assistant_meta = {coach_mode, hint_level}`. — `backend/app/models/chat.py`

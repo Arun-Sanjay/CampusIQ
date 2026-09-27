@@ -17,6 +17,7 @@ import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import ProgressBar from '../../components/ui/ProgressBar'
+import { ResponsiveTable, type ResponsiveColumn } from '../../components/ui'
 import { ApiError, analyticsApi } from '../../api/client'
 import type {
   ClassAnalytics,
@@ -128,6 +129,72 @@ export default function StudentDetailsPage() {
     })
   }, [analytics, searchTerm, trendFilter])
 
+  const studentColumns: ResponsiveColumn<StudentPerformanceRow>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      primary: true,
+      render: (s) => (
+        <div className="flex items-center gap-2">
+          <Avatar name={s.name} size="sm" />
+          <span className="text-[var(--text-primary)] font-medium">{s.name}</span>
+        </div>
+      ),
+    },
+    {
+      key: 'avg_score',
+      header: 'Avg Score',
+      className: 'font-semibold',
+      render: (s) => (
+        <span className={clsx('font-semibold', getScoreColor(s.avg_score ?? 0))}>
+          {s.avg_score != null ? `${s.avg_score.toFixed(0)}%` : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'quizzes_taken',
+      header: 'Quizzes Taken',
+      className: 'text-[var(--text-secondary)]',
+      render: (s) => s.quizzes_taken,
+    },
+    {
+      key: 'trend',
+      header: 'Trend',
+      className: 'text-[var(--text-secondary)] capitalize',
+      render: (s) => s.trend,
+    },
+    {
+      key: 'weak_area',
+      header: 'Weak Area',
+      className: 'text-[var(--text-tertiary)]',
+      render: (s) => s.weak_area ?? '—',
+    },
+    {
+      key: 'last_active',
+      header: 'Last Active',
+      className: 'text-[var(--text-tertiary)]',
+      render: (s) => relativeTime(s.last_attempt_at),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      hideOnMobile: true,
+      render: (s) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={Eye}
+          onClick={(e) => {
+            e.stopPropagation()
+            setSelectedId(s.student_id)
+          }}
+        >
+          View
+        </Button>
+      ),
+    },
+  ]
+
   if (loading) {
     return (
       <Card className="flex items-center gap-2 justify-center py-12 text-[var(--text-tertiary)]">
@@ -159,7 +226,7 @@ export default function StudentDetailsPage() {
         </div>
       </motion.div>
 
-      <motion.div variants={fadeUp} className="flex gap-4">
+      <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-3 sm:gap-4">
         <div className="flex-1">
           <Input
             placeholder="Search students…"
@@ -168,7 +235,7 @@ export default function StudentDetailsPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="w-48">
+        <div className="w-full sm:w-48">
           <Select
             options={[
               { value: 'all', label: 'All trends' },
@@ -186,99 +253,13 @@ export default function StudentDetailsPage() {
 
       <motion.div variants={fadeUp}>
         <Card padding={false}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border-default)]">
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Name
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Avg Score
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Quizzes Taken
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Trend
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Weak Area
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Last Active
-                  </th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-12 text-center text-[var(--text-tertiary)]"
-                    >
-                      No students match the current filters yet.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredStudents.map((s, i) => (
-                    <motion.tr
-                      key={s.student_id}
-                      className={clsx(
-                        'border-b border-[var(--border-default)] last:border-b-0 cursor-pointer hover:bg-[var(--bg-tertiary)]/40',
-                        s.student_id === selectedId && 'bg-primary/5',
-                      )}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.05 + Math.min(i, 12) * 0.02 }}
-                      onClick={() => setSelectedId(s.student_id)}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Avatar name={s.name} size="sm" />
-                          <span className="text-[var(--text-primary)] font-medium">{s.name}</span>
-                        </div>
-                      </td>
-                      <td
-                        className={clsx(
-                          'px-4 py-3 font-semibold',
-                          getScoreColor(s.avg_score ?? 0),
-                        )}
-                      >
-                        {s.avg_score != null ? `${s.avg_score.toFixed(0)}%` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-secondary)]">{s.quizzes_taken}</td>
-                      <td className="px-4 py-3 text-[var(--text-secondary)] capitalize">
-                        {s.trend}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-tertiary)]">
-                        {s.weak_area ?? '—'}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-tertiary)]">
-                        {relativeTime(s.last_attempt_at)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={Eye}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setSelectedId(s.student_id)
-                          }}
-                        >
-                          View
-                        </Button>
-                      </td>
-                    </motion.tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            columns={studentColumns}
+            rows={filteredStudents}
+            rowKey={(s) => s.student_id}
+            onRowClick={(s) => setSelectedId(s.student_id)}
+            empty="No students match the current filters yet."
+          />
         </Card>
       </motion.div>
 
@@ -310,7 +291,7 @@ export default function StudentDetailsPage() {
                   </div>
                 </CardHeader>
 
-                <div className="grid grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                   <div className="col-span-1">
                     <h4 className="text-xs font-semibold text-[var(--text-tertiary)] uppercase tracking-wider mb-3">
                       Recent Quiz Performance

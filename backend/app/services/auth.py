@@ -29,6 +29,17 @@ def get_user_by_email(db: Session, email: str) -> User | None:
     return db.scalar(stmt)
 
 
+def get_user_by_username(db: Session, username: str) -> User | None:
+    stmt = _user_with_profiles_query().where(User.username == username.strip().lower())
+    return db.scalar(stmt)
+
+
+def get_user_by_identifier(db: Session, identifier: str) -> User | None:
+    """Look up a user by email OR username (login accepts either)."""
+    ident = identifier.strip().lower()
+    return get_user_by_email(db, ident) or get_user_by_username(db, ident)
+
+
 def get_user_by_id(db: Session, user_id: uuid.UUID) -> User | None:
     stmt = _user_with_profiles_query().where(User.id == user_id)
     return db.scalar(stmt)
@@ -44,9 +55,18 @@ def signup(db: Session, data: SignupRequest) -> TokenResponse:
             detail="An account with this email already exists",
         )
 
+    # Check username uniqueness (already normalized to lowercase by the schema)
+    existing_username = db.scalar(select(User).where(User.username == data.username))
+    if existing_username is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That username is already taken",
+        )
+
     # Create the user
     user = User(
         email=data.email.lower(),
+        username=data.username,
         full_name=data.full_name.strip(),
         role=UserRole(data.role),
         hashed_password=hash_password(data.password),
@@ -83,8 +103,8 @@ def signup(db: Session, data: SignupRequest) -> TokenResponse:
 
 
 def login(db: Session, data: LoginRequest) -> TokenResponse:
-    """Verify credentials and return a JWT."""
-    user = get_user_by_email(db, data.email)
+    """Verify credentials and return a JWT. Accepts an email or a username."""
+    user = get_user_by_identifier(db, data.login_id)
 
     # Constant-time behaviour: always run verify_password even if user missing
     if user is None:
@@ -92,13 +112,13 @@ def login(db: Session, data: LoginRequest) -> TokenResponse:
         verify_password(data.password, "$2b$12$" + "x" * 53)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Incorrect email/username or password",
         )
 
     if not verify_password(data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Incorrect email/username or password",
         )
 
     if not user.is_active:

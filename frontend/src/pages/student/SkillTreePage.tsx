@@ -92,14 +92,14 @@ export default function SkillTreePage() {
               Mastery ≥ 50% unlocks a skill. DFS-based prerequisite detection (DAA Unit II).
             </span>
           </CardHeader>
-          <div className="flex items-center gap-8">
-            <div className="text-center">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+            <div className="text-center sm:text-left">
               <span className="stat-value text-4xl">
                 {tree.mastered_count}/{tree.total_count}
               </span>
               <p className="text-xs text-[var(--text-tertiary)] mt-1">Skills mastered</p>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <ProgressBar
                 value={tree.overall_percent}
                 max={100}

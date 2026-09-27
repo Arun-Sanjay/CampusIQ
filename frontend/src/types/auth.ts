@@ -27,6 +27,7 @@ export interface TeacherProfile {
 export interface User {
   id: string
   email: string
+  username: string
   full_name: string
   role: UserRole
   is_active: boolean
@@ -45,12 +46,13 @@ export interface TokenResponse {
 }
 
 export interface LoginRequest {
-  email: string
+  identifier: string // email OR username
   password: string
 }
 
 export interface SignupRequest {
   email: string
+  username: string
   password: string
   full_name: string
   role: UserRole

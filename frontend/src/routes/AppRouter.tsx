@@ -23,10 +23,12 @@ import NoteAssistantPage from '../pages/student/NoteAssistantPage'
 import CollegeGPTPage from '../pages/student/CollegeGPTPage'
 import QuizListPage from '../pages/student/QuizListPage'
 import QuizTakingPage from '../pages/student/QuizTakingPage'
+import ProctoredQuizPage from '../pages/student/ProctoredQuizPage'
 import QuizResultPage from '../pages/student/QuizResultPage'
 import CommunityPage from '../pages/student/CommunityPage'
 import SchedulePage from '../pages/student/SchedulePage'
 import CodingProblemsPage from '../pages/student/CodingProblemsPage'
+import CodingPatternPage from '../pages/student/CodingPatternPage'
 import CodingProblemPage from '../pages/student/CodingProblemPage'
 import ResumeBuilderPage from '../pages/student/ResumeBuilderPage'
 import SkillGapPage from '../pages/student/SkillGapPage'
@@ -39,6 +41,7 @@ import SkillTreePage from '../pages/student/SkillTreePage'
 import LeaderboardPage from '../pages/student/LeaderboardPage'
 import ProfilePage from '../pages/student/ProfilePage'
 import BossBattlesPage from '../pages/student/BossBattlesPage'
+import GradesPage from '../pages/student/GradesPage'
 import ResumePrintPage from '../pages/student/ResumePrintPage'
 
 // Teacher pages
@@ -50,7 +53,11 @@ import AnnouncementsPage from '../pages/teacher/AnnouncementsPage'
 import QuizSchedulingPage from '../pages/teacher/QuizSchedulingPage'
 import AnalyticsPage from '../pages/teacher/AnalyticsPage'
 import StudentDetailsPage from '../pages/teacher/StudentDetailsPage'
+import EnrollmentPage from '../pages/teacher/EnrollmentPage'
 import SimilarityCheckerPage from '../pages/teacher/SimilarityCheckerPage'
+import GradingExamsPage from '../pages/teacher/grading/GradingExamsPage'
+import GradingWorkspacePage from '../pages/teacher/grading/GradingWorkspacePage'
+import GradingDashboardPage from '../pages/teacher/GradingDashboardPage'
 
 // Admin pages
 import AdminDashboard from '../pages/admin/DashboardPage'
@@ -83,10 +90,12 @@ const router = createBrowserRouter(
           <Route index element={<StudentDashboard />} />
           <Route path="notes" element={<NoteAssistantPage />} />
           <Route path="coding" element={<CodingProblemsPage />} />
+          <Route path="coding/pattern/:slug" element={<CodingPatternPage />} />
           <Route path="coding/:slug" element={<CodingProblemPage />} />
           <Route path="college-gpt" element={<CollegeGPTPage />} />
           <Route path="quizzes" element={<QuizListPage />} />
           <Route path="quizzes/:quizId/take" element={<QuizTakingPage />} />
+          <Route path="quizzes/:quizId/proctored" element={<ProctoredQuizPage />} />
           <Route path="quizzes/:quizId/result/:attemptId" element={<QuizResultPage />} />
           <Route path="community" element={<CommunityPage />} />
           <Route path="schedule" element={<SchedulePage />} />
@@ -100,6 +109,7 @@ const router = createBrowserRouter(
           <Route path="skill-tree" element={<SkillTreePage />} />
           <Route path="leaderboard" element={<LeaderboardPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="grades" element={<GradesPage />} />
           <Route path="boss-battles" element={<BossBattlesPage />} />
         </Route>
       </Route>
@@ -109,11 +119,15 @@ const router = createBrowserRouter(
         <Route path="teacher" element={<AppLayout />}>
           <Route index element={<TeacherDashboard />} />
           <Route path="subjects" element={<SubjectsPage />} />
+          <Route path="roster" element={<EnrollmentPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="quizzes" element={<QuizManagementPage />} />
+          <Route path="grading" element={<GradingExamsPage />} />
+          <Route path="grading/:examId" element={<GradingWorkspacePage />} />
           <Route path="announcements" element={<AnnouncementsPage />} />
           <Route path="quiz-scheduling" element={<QuizSchedulingPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="grades" element={<GradingDashboardPage />} />
           <Route path="students" element={<StudentDetailsPage />} />
           <Route path="similarity" element={<SimilarityCheckerPage />} />
         </Route>

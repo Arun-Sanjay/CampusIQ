@@ -30,6 +30,8 @@ from app.schemas.coding import (
     CodingDifficultyLiteral,
     CodingStatsResponse,
     MarkSolvedResponse,
+    PatternListItem,
+    PatternWithProblems,
     ProblemDetail,
     ProblemListItem,
     ProblemRunnerPayload,
@@ -78,6 +80,29 @@ def list_problems(
 )
 def get_stats(db: DbSession, current_user: CurrentUser) -> CodingStatsResponse:
     return CodingStatsResponse(**coding_service.get_stats(db, current_user))
+
+
+# ──────────────────────────────────────────────────────────────────
+# Patterns (Phase 2 curriculum)
+# ──────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/patterns",
+    response_model=list[PatternListItem],
+    summary="List DSA patterns (the clickable boxes), in curriculum order",
+)
+def list_patterns(db: DbSession, current_user: CurrentUser) -> list[PatternListItem]:
+    return [PatternListItem(**p) for p in coding_service.list_patterns(db, current_user)]
+
+
+@router.get(
+    "/patterns/{slug}",
+    response_model=PatternWithProblems,
+    summary="A pattern and its problems (ordered easy->hard)",
+)
+def get_pattern(slug: str, db: DbSession, current_user: CurrentUser) -> PatternWithProblems:
+    return PatternWithProblems(**coding_service.get_pattern_with_problems(db, current_user, slug))
 
 
 # ──────────────────────────────────────────────────────────────────

@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+SubjectCategoryLiteral = Literal["theory", "theory_practice", "practical", "project", "audit"]
 
 
 class SubjectBase(BaseModel):
@@ -20,6 +23,16 @@ class SubjectBase(BaseModel):
     description: str | None = Field(None, max_length=500)
     semester: int | None = Field(None, ge=1, le=8)
     branch: str | None = Field(None, max_length=100)
+    # ── Grading config (Handbook §4) ──
+    category: SubjectCategoryLiteral = "theory"
+    credits: int = Field(0, ge=0, le=30)
+    cie_max: int = Field(100, ge=1)
+    see_max: int = Field(100, ge=1)
+    has_lab_split: bool = False
+    cie_theory_max: int | None = Field(None, ge=0)
+    cie_lab_max: int | None = Field(None, ge=0)
+    see_theory_max: int | None = Field(None, ge=0)
+    see_lab_max: int | None = Field(None, ge=0)
 
 
 class SubjectCreate(SubjectBase):
@@ -31,6 +44,15 @@ class SubjectUpdate(BaseModel):
     description: str | None = Field(None, max_length=500)
     semester: int | None = Field(None, ge=1, le=8)
     branch: str | None = Field(None, max_length=100)
+    category: SubjectCategoryLiteral | None = None
+    credits: int | None = Field(None, ge=0, le=30)
+    cie_max: int | None = Field(None, ge=1)
+    see_max: int | None = Field(None, ge=1)
+    has_lab_split: bool | None = None
+    cie_theory_max: int | None = Field(None, ge=0)
+    cie_lab_max: int | None = Field(None, ge=0)
+    see_theory_max: int | None = Field(None, ge=0)
+    see_lab_max: int | None = Field(None, ge=0)
 
 
 class SubjectResponse(BaseModel):
@@ -48,6 +70,15 @@ class SubjectResponse(BaseModel):
     description: str | None = None
     semester: int | None = None
     branch: str | None = None
+    category: SubjectCategoryLiteral = "theory"
+    credits: int = 0
+    cie_max: int = 100
+    see_max: int = 100
+    has_lab_split: bool = False
+    cie_theory_max: int | None = None
+    cie_lab_max: int | None = None
+    see_theory_max: int | None = None
+    see_lab_max: int | None = None
     created_at: datetime
 
     # Computed counts (populated by the service layer)

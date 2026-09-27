@@ -238,11 +238,11 @@ export default function JobTrackerPage() {
         </motion.div>
       )}
 
-      <motion.div variants={fadeUp} className="flex items-center gap-3">
+      <motion.div variants={fadeUp} className="flex flex-wrap items-center gap-3">
         <Button icon={Plus} onClick={() => setAddOpen(true)}>
           Add Listing
         </Button>
-        <div className="w-72">
+        <div className="w-full sm:w-72">
           <Input
             icon={Search}
             placeholder="Search jobs..."
@@ -311,7 +311,7 @@ export default function JobTrackerPage() {
         <motion.div
           variants={fadeUp}
           className="flex gap-4 overflow-x-auto pb-4"
-          style={{ minHeight: 'calc(100vh - 22rem)' }}
+          style={{ minHeight: 'calc(100dvh - 22rem)' }}
         >
           {COLUMNS.map((col) => {
             const cards = board[col.status]

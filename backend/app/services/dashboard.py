@@ -44,7 +44,7 @@ from app.schemas.dashboard import (
     UserBreakdownRow,
     XPProgress,
 )
-from app.services import announcement, campus_iq_score, task_feed, xp
+from app.services import announcement, campus_iq_score, enrollment, task_feed, xp
 
 
 # ── Friendly labels for XP event types ──
@@ -201,15 +201,8 @@ def get_teacher_dashboard(db: Session, user: User) -> TeacherDashboardResponse:
         or 0
     )
 
-    # Distinct students who have attempted any of this teacher's quizzes.
-    students_total = (
-        db.scalar(
-            select(func.count(func.distinct(QuizAttempt.student_id)))
-            .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
-            .where(Quiz.created_by_id == user.id)
-        )
-        or 0
-    )
+    # Distinct students enrolled across this teacher's subjects (the roster).
+    students_total = enrollment.enrolled_student_count_for_teacher(db, user.id)
 
     # Class average across all attempts on this teacher's quizzes.
     avg_score = db.scalar(
@@ -507,7 +500,7 @@ def get_student_detail(
     # Community contributions = answers posted by this student.
     community_contributions = (
         db.scalar(
-            select(func.count(DoubtAnswer.id)).where(DoubtAnswer.author_id == student_id)
+            select(func.count(DoubtAnswer.id)).where(DoubtAnswer.answered_by_id == student_id)
         )
         or 0
     )

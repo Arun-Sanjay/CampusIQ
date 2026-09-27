@@ -15,9 +15,10 @@ import type { LucideIcon } from 'lucide-react'
 import Card, { CardHeader, CardTitle } from '../../components/ui/Card'
 import ProgressBar from '../../components/ui/ProgressBar'
 import Select from '../../components/ui/Select'
+import { ResponsiveTable, type ResponsiveColumn } from '../../components/ui'
 import StatCard from '../../components/dashboard/StatCard'
 import { ApiError, analyticsApi, subjectsApi } from '../../api/client'
-import type { ClassAnalytics, Subject } from '../../types'
+import type { ClassAnalytics, StudentPerformanceRow, Subject } from '../../types'
 
 const stagger: Variants = { animate: { transition: { staggerChildren: 0.05 } } }
 const fadeUp: Variants = {
@@ -116,10 +117,58 @@ export default function AnalyticsPage() {
     return Math.max(1, ...analytics.score_distribution.map((b) => b.count))
   }, [analytics])
 
+  const studentColumns: ResponsiveColumn<StudentPerformanceRow>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      primary: true,
+      className: 'font-medium text-[var(--text-primary)]',
+      render: (s) => s.name,
+    },
+    {
+      key: 'quizzes_taken',
+      header: 'Quizzes Taken',
+      headerClassName: 'text-right',
+      className: 'text-right text-[var(--text-secondary)] tabular-nums',
+      render: (s) => s.quizzes_taken,
+    },
+    {
+      key: 'avg_score',
+      header: 'Avg Score',
+      headerClassName: 'text-right',
+      className: 'text-right tabular-nums',
+      render: (s) => (
+        <span className={scoreColor(s.avg_score)}>
+          {s.avg_score != null ? `${s.avg_score.toFixed(0)}%` : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'trend',
+      header: 'Trend',
+      headerClassName: 'text-center',
+      className: 'text-center',
+      render: (s) =>
+        s.trend === 'up' ? (
+          <TrendingUp className="h-4 w-4 text-success inline-block" />
+        ) : s.trend === 'down' ? (
+          <TrendingDown className="h-4 w-4 text-danger inline-block" />
+        ) : (
+          <Minus className="h-4 w-4 text-[var(--text-tertiary)] inline-block" />
+        ),
+    },
+    {
+      key: 'weak_area',
+      header: 'Weak Area',
+      className: 'text-[var(--text-secondary)]',
+      render: (s) => s.weak_area ?? '—',
+    },
+  ]
+
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
       {/* Filter */}
-      <motion.div variants={fadeUp} className="w-72">
+      <motion.div variants={fadeUp} className="w-full sm:w-72">
         <Select
           options={subjectOptions}
           value={subjectFilter}
@@ -147,7 +196,7 @@ export default function AnalyticsPage() {
       {!loading && analytics && (
         <>
           {/* Stats Row */}
-          <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4">
+          <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {stats.map((stat, i) => (
               <motion.div
                 key={stat.label}
@@ -211,24 +260,29 @@ export default function AnalyticsPage() {
               ) : (
                 <div className="space-y-4">
                   {analytics.weak_topics.map((item) => (
-                    <div key={item.topic} className="flex items-center gap-4">
-                      <span className="text-sm text-[var(--text-primary)] w-56 shrink-0 truncate">
+                    <div
+                      key={item.topic}
+                      className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4"
+                    >
+                      <span className="text-sm text-[var(--text-primary)] w-full sm:w-56 sm:shrink-0 truncate">
                         {item.topic}
                       </span>
-                      <div className="flex-1">
-                        <ProgressBar
-                          value={item.score_percent}
-                          max={100}
-                          color={getBarColor(item.score_percent)}
-                          size="md"
-                        />
+                      <div className="flex items-center gap-3 sm:contents">
+                        <div className="flex-1 min-w-0">
+                          <ProgressBar
+                            value={item.score_percent}
+                            max={100}
+                            color={getBarColor(item.score_percent)}
+                            size="md"
+                          />
+                        </div>
+                        <span className="text-sm font-medium text-[var(--text-secondary)] w-16 text-right tabular-nums">
+                          {item.score_percent.toFixed(0)}%
+                        </span>
+                        <span className="text-xs text-[var(--text-tertiary)] w-16 text-right tabular-nums">
+                          {item.attempts} att
+                        </span>
                       </div>
-                      <span className="text-sm font-medium text-[var(--text-secondary)] w-16 text-right tabular-nums">
-                        {item.score_percent.toFixed(0)}%
-                      </span>
-                      <span className="text-xs text-[var(--text-tertiary)] w-16 text-right tabular-nums">
-                        {item.attempts} att
-                      </span>
                     </div>
                   ))}
                 </div>
@@ -242,65 +296,16 @@ export default function AnalyticsPage() {
               <CardHeader className="px-4 pt-4">
                 <CardTitle>Student Performance</CardTitle>
               </CardHeader>
-              {analytics.student_performance.length === 0 ? (
-                <p className="text-sm text-[var(--text-tertiary)] text-center py-6">
-                  No student attempts yet for this scope.
-                </p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-[var(--border-default)]">
-                        <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Name
-                        </th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Quizzes Taken
-                        </th>
-                        <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Avg Score
-                        </th>
-                        <th className="text-center px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Trend
-                        </th>
-                        <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                          Weak Area
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analytics.student_performance.map((s) => (
-                        <tr
-                          key={s.student_id}
-                          className="border-b border-[var(--border-default)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors"
-                        >
-                          <td className="px-4 py-3 font-medium text-[var(--text-primary)]">
-                            {s.name}
-                          </td>
-                          <td className="px-4 py-3 text-right text-[var(--text-secondary)] tabular-nums">
-                            {s.quizzes_taken}
-                          </td>
-                          <td className={`px-4 py-3 text-right tabular-nums ${scoreColor(s.avg_score)}`}>
-                            {s.avg_score != null ? `${s.avg_score.toFixed(0)}%` : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {s.trend === 'up' ? (
-                              <TrendingUp className="h-4 w-4 text-success inline-block" />
-                            ) : s.trend === 'down' ? (
-                              <TrendingDown className="h-4 w-4 text-danger inline-block" />
-                            ) : (
-                              <Minus className="h-4 w-4 text-[var(--text-tertiary)] inline-block" />
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-[var(--text-secondary)]">
-                            {s.weak_area ?? '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              <ResponsiveTable
+                columns={studentColumns}
+                rows={analytics.student_performance}
+                rowKey={(s) => s.student_id}
+                empty={
+                  <p className="text-sm text-[var(--text-tertiary)] text-center py-6">
+                    No student attempts yet for this scope.
+                  </p>
+                }
+              />
             </Card>
           </motion.div>
         </>

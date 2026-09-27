@@ -499,8 +499,8 @@ export default function BossBattlesPage() {
                         Locked
                       </Button>
                     ) : (
-                      <Button variant="ghost" onClick={() => void startBattle(battle)} icon={Trophy}>
-                        View Leaderboard
+                      <Button disabled variant="secondary" icon={Trophy}>
+                        Concluded
                       </Button>
                     )}
                   </div>

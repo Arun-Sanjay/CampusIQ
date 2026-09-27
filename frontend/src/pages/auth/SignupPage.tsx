@@ -6,6 +6,7 @@ import {
   Mail,
   Lock,
   User as UserIcon,
+  AtSign,
   GraduationCap,
   BookOpen,
   Shield,
@@ -13,6 +14,8 @@ import {
   ArrowRight,
   type LucideIcon,
 } from 'lucide-react'
+
+const USERNAME_RE = /^[a-z0-9][a-z0-9_.]{2,29}$/
 import { clsx } from 'clsx'
 import { authApi, ApiError } from '../../api/client'
 import { useAuthStore } from '../../store/authStore'
@@ -42,6 +45,7 @@ const roleToHome: Record<UserRole, string> = {
 interface FormState {
   name: string
   email: string
+  username: string
   password: string
   role: UserRole | ''
   branch: string
@@ -57,6 +61,7 @@ export default function SignupPage() {
   const [form, setForm] = useState<FormState>({
     name: '',
     email: '',
+    username: '',
     password: '',
     role: '',
     branch: '',
@@ -76,6 +81,11 @@ export default function SignupPage() {
       setError('Please select your role')
       return
     }
+    const username = form.username.trim().toLowerCase()
+    if (!USERNAME_RE.test(username)) {
+      setError('Username must be 3-30 characters: lowercase letters, numbers, dot or underscore.')
+      return
+    }
     if (form.password.length < 8) {
       setError('Password must be at least 8 characters')
       return
@@ -85,6 +95,7 @@ export default function SignupPage() {
     try {
       const payload: SignupRequest = {
         email: form.email.trim(),
+        username,
         password: form.password,
         full_name: form.name.trim(),
         role: form.role,
@@ -120,7 +131,7 @@ export default function SignupPage() {
     <div className="landing-theme">
       <div
         style={{
-          minHeight: '100vh',
+          minHeight: '100dvh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -241,6 +252,16 @@ export default function SignupPage() {
               required
               disabled={loading}
               autoComplete="email"
+            />
+            <MarketingInput
+              label="Username"
+              icon={AtSign}
+              placeholder="your.handle — teachers use this to add you"
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              required
+              disabled={loading}
+              autoComplete="username"
             />
             <MarketingInput
               label="Password"

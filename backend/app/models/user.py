@@ -4,7 +4,18 @@ import enum
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Date, DateTime, Enum, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import (
+    JSON,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -19,6 +30,20 @@ class UserRole(str, enum.Enum):
     STUDENT = "student"
     TEACHER = "teacher"
     ADMIN = "admin"
+
+
+class SubjectCategory(str, enum.Enum):
+    """Evaluation shape of a subject — drives CIE/SEE maxima + grading.
+
+    Lives here (not in grading.py) because ``Subject`` is defined in this module
+    and references it as a column type; keeping it here avoids a circular import.
+    """
+
+    THEORY = "theory"  # CIE 100 / SEE 100
+    THEORY_PRACTICE = "theory_practice"  # CIE 150 / SEE 150 (theory + lab split)
+    PRACTICAL = "practical"  # CIE 50 / SEE 50
+    PROJECT = "project"  # CIE 50 / SEE 50 (phase-based)
+    AUDIT = "audit"  # 0 credits, excluded from SGPA/CGPA
 
 
 class College(Base):
@@ -39,6 +64,9 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    # Public handle — unique. Teachers enrol a student by username, and it's a
+    # valid login identifier alongside email.
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", values_callable=_enum_values),
@@ -99,7 +127,10 @@ class StudentProfile(Base):
     # Academic info
     branch: Mapped[str | None] = mapped_column(String(100))
     semester: Mapped[int | None] = mapped_column(Integer)
-    cgpa: Mapped[float | None] = mapped_column(Numeric(4, 2))
+    cgpa: Mapped[float | None] = mapped_column(Numeric(4, 2))  # authoritative writer = grade engine
+    # University Seat Number (e.g. 1RV23CS001) — used to match answer sheets.
+    usn: Mapped[str | None] = mapped_column(String(32), unique=True, index=True)
+    section: Mapped[str | None] = mapped_column(String(10))
     # External profiles
     github_url: Mapped[str | None] = mapped_column(String(500))
     linkedin_url: Mapped[str | None] = mapped_column(String(500))
@@ -158,6 +189,21 @@ class Subject(Base):
     description: Mapped[str | None] = mapped_column(String(500))
     semester: Mapped[int | None] = mapped_column(Integer)
     branch: Mapped[str | None] = mapped_column(String(100))
+    # ── Grading config (fixed per-offering totals; component split lives in
+    #    subject_grade_configs). Defaults keep the 8 pre-grading subjects valid. ──
+    category: Mapped[SubjectCategory] = mapped_column(
+        Enum(SubjectCategory, name="subject_category", values_callable=_enum_values),
+        default=SubjectCategory.THEORY,
+        nullable=False,
+    )
+    credits: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cie_max: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    see_max: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    has_lab_split: Mapped[bool] = mapped_column(default=False, nullable=False)
+    cie_theory_max: Mapped[int | None] = mapped_column(Integer)
+    cie_lab_max: Mapped[int | None] = mapped_column(Integer)
+    see_theory_max: Mapped[int | None] = mapped_column(Integer)
+    see_lab_max: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -177,6 +223,30 @@ class Subject(Base):
     def is_private(self) -> bool:
         """True iff this subject is a student's personal notebook."""
         return self.owner_student_id is not None
+
+
+class SubjectEnrollment(Base):
+    """A student enrolled (by a teacher) into one specific subject.
+
+    Enrolled students see that subject's quizzes + announcements; non-enrolled
+    students don't. Teacher-initiated and immediate — no acceptance flow.
+    """
+
+    __tablename__ = "subject_enrollments"
+    __table_args__ = (
+        UniqueConstraint("subject_id", "student_id", name="uq_subject_enrollment"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    subject_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    student_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    enrolled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class DocumentStatus(str, enum.Enum):

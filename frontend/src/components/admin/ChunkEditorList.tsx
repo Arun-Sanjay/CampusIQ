@@ -230,10 +230,10 @@ export default function ChunkEditorList({
   )
 
   return (
-    <div className="grid grid-cols-[16rem_1fr] gap-4 min-h-[480px]">
+    <div className="grid grid-cols-1 lg:grid-cols-[16rem_1fr] gap-4 lg:min-h-[480px]">
       {/* Left rail */}
       <aside
-        className="rounded-card border p-3 space-y-3 max-h-[calc(100vh-260px)] overflow-y-auto"
+        className="rounded-card border p-3 space-y-3 max-h-[18rem] lg:max-h-[calc(100dvh-260px)] overflow-y-auto"
         style={{
           background: 'var(--bg-elevated)',
           borderColor: 'var(--border-default)',

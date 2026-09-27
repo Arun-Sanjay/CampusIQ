@@ -74,12 +74,19 @@ def get_leaderboard(
         .limit(limit)
     ).all()
 
+    # A student may have more than one CampusIQScore row in the data; rows are
+    # score-descending, so keep the first (highest) per student and rank the
+    # deduplicated list — prevents the same student showing up twice.
     out: list[LeaderboardRow] = []
-    for rank, (score, student, profile) in enumerate(rows, start=1):
+    seen: set = set()
+    for score, student, profile in rows:
+        if student.id in seen:
+            continue
+        seen.add(student.id)
         total = float(score.total_score or 0)
         out.append(
             LeaderboardRow(
-                rank=rank,
+                rank=len(out) + 1,
                 student_id=str(student.id),
                 name=student.full_name,
                 total_score=round(total, 2),

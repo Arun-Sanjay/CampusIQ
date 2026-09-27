@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 
 from app.api.deps import ClaudeRateLimited, CurrentUser, DbSession
 from app.models.placement import InterviewMode, InterviewPersona
@@ -14,10 +13,12 @@ from app.schemas.mock_interview import (
     InterviewSessionResponse,
     InterviewStartRequest,
     InterviewTurnResponse,
-    InterviewVoiceTurnResponse,
+    LiveRoundFinalizeRequest,
+    LiveRoundFinalizeResponse,
+    LiveRoundStartResponse,
     VoiceCapabilitiesResponse,
 )
-from app.services import mock_interview, speech
+from app.services import elevenlabs_agent, mock_interview, speech
 
 router = APIRouter()
 
@@ -121,54 +122,69 @@ def end_interview(
 
 
 # ═══════════════════════════════════════════════════════════════════
-# Voice mode — Phase 20
+# Live voice mode — ElevenLabs Conversational AI (Agents)
 # ═══════════════════════════════════════════════════════════════════
+#
+# Each round runs as a real-time spoken conversation handled by ElevenLabs in
+# the browser (no per-turn server round-trip). The server only mints the signed
+# URL to start a round and grades the finished transcript with Claude.
 
 
 @router.get(
     "/voice/capabilities",
     response_model=VoiceCapabilitiesResponse,
-    summary="Check whether Whisper + ElevenLabs are configured",
+    summary="Report which voice paths are available (live agent / ASR / TTS)",
 )
 def voice_capabilities() -> VoiceCapabilitiesResponse:
     return VoiceCapabilitiesResponse(
         asr_available=speech.is_asr_available(),
         tts_available=speech.is_tts_available(),
+        agent_available=elevenlabs_agent.is_configured(),
         voice_by_round=speech.VOICE_BY_ROUND,
     )
 
 
 @router.post(
-    "/{session_id}/voice",
-    response_model=InterviewVoiceTurnResponse,
-    summary="Submit an audio answer (webm/wav/mp3) and get an audio reply",
+    "/{session_id}/live/rounds/{round_number}/start",
+    response_model=LiveRoundStartResponse,
+    summary="Mint a signed ElevenLabs agent URL + per-round overrides for a live round",
 )
-async def submit_voice_turn(
+def start_live_round(
     session_id: uuid.UUID,
+    round_number: int,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> LiveRoundStartResponse:
+    payload = mock_interview.start_live_round(
+        db, current_user, session_id, round_number
+    )
+    return LiveRoundStartResponse(**payload)
+
+
+@router.post(
+    "/{session_id}/live/rounds/{round_number}/finalize",
+    response_model=LiveRoundFinalizeResponse,
+    summary="End a live round and grade its transcript in the background",
+)
+def finalize_live_round(
+    session_id: uuid.UUID,
+    round_number: int,
+    data: LiveRoundFinalizeRequest,
+    background_tasks: BackgroundTasks,
     db: DbSession,
     current_user: ClaudeRateLimited,
-    audio: Annotated[UploadFile, File(description="Candidate's spoken answer")],
-    # Browser-side Web Speech API transcript — optional override so voice
-    # interviews work without the server-side OPENAI_API_KEY being set.
-    browser_transcript: Annotated[str | None, Form()] = None,
-) -> InterviewVoiceTurnResponse:
-    audio_bytes = await audio.read()
-    if not audio_bytes:
-        raise HTTPException(status_code=400, detail="Audio file is empty")
-
-    result = mock_interview.voice_turn(
+) -> LiveRoundFinalizeResponse:
+    session, grading, completing = mock_interview.finalize_live_round(
         db,
         current_user,
         session_id,
-        audio_bytes,
-        transcript_override=browser_transcript,
+        round_number,
+        data.conversation_id,
+        background_tasks,
     )
-    return InterviewVoiceTurnResponse(
-        session=mock_interview._to_session_response(result.session),
-        assistant_message=result.assistant_message,
-        round_transitioned=result.round_transitioned,
-        interview_completed=result.interview_completed,
-        transcribed_text=result.transcribed_text,
-        assistant_audio_url=result.assistant_audio_url,
-        assistant_voice_id=result.assistant_voice_id,
+    return LiveRoundFinalizeResponse(
+        round_number=round_number,
+        grading=grading,
+        interview_completing=completing,
+        session=mock_interview._to_session_response(session),
     )

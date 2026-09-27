@@ -524,11 +524,10 @@ export default function ResumeBuilderPage() {
       {/* Split layout */}
       <motion.div
         variants={fadeUp}
-        className="flex gap-4 no-print"
-        style={{ height: 'calc(100vh - 14rem)' }}
+        className="grid grid-cols-1 lg:grid-cols-2 gap-4 no-print lg:h-[calc(100dvh-14rem)]"
       >
         {/* Left: AI Chat */}
-        <div className="w-1/2 flex flex-col card overflow-hidden">
+        <div className="flex flex-col card overflow-hidden h-[70dvh] lg:h-auto">
           {/* Header */}
           <div className="px-4 py-3 border-b border-[var(--border-default)] flex items-center justify-between bg-[var(--bg-secondary)]">
             <div className="flex items-center gap-2.5">
@@ -624,7 +623,7 @@ export default function ResumeBuilderPage() {
         </div>
 
         {/* Right: Resume Preview */}
-        <div className="w-1/2 overflow-y-auto" id="resume-preview-wrapper">
+        <div className="overflow-y-auto min-h-0" id="resume-preview-wrapper">
           <Card className="h-full">
             {!hasAnyData ? (
               <p className="text-sm text-[var(--text-tertiary)] text-center py-12">
@@ -964,7 +963,7 @@ export default function ResumeBuilderPage() {
       </motion.div>
 
       {/* Bottom action bar */}
-      <motion.div variants={fadeUp} className="flex gap-3 no-print">
+      <motion.div variants={fadeUp} className="flex flex-wrap gap-3 no-print">
         <Button icon={Download} onClick={handlePrint} disabled={!hasAnyData}>
           Download PDF
         </Button>

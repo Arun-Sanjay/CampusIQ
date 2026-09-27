@@ -83,6 +83,7 @@ def _make_user(db: Session) -> uuid.UUID:
     suffix = uuid.uuid4().hex[:8]
     user = User(
         email=f"notif-{suffix}@example.com",
+        username=f"notif{suffix}",
         full_name=f"Notif {suffix}",
         hashed_password="x",
         role=UserRole.STUDENT,

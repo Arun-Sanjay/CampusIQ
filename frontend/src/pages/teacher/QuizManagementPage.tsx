@@ -74,6 +74,8 @@ export default function QuizManagementPage() {
   const [genDifficulty, setGenDifficulty] = useState<Difficulty>('medium')
   const [genNumQuestions, setGenNumQuestions] = useState(5)
   const [genTopic, setGenTopic] = useState('')
+  const [genMode, setGenMode] = useState<'practice' | 'test'>('practice')
+  const [genCie, setGenCie] = useState<'quiz_1' | 'quiz_2' | 'test_1' | 'test_2'>('test_1')
 
   // Background jobs — each Generate click fires a request and pushes a
   // job into the global store. The modal closes immediately so the
@@ -159,6 +161,10 @@ export default function QuizManagementPage() {
       difficulty: genDifficulty,
       num_questions: genNumQuestions,
       topic_hint: job.topic,
+      mode: genMode,
+      ...(genMode === 'test'
+        ? { cie_component: genCie, requires_proctoring: true }
+        : {}),
     }
 
     // Optimistic UI: shut the modal immediately, drop the chip in the
@@ -248,7 +254,7 @@ export default function QuizManagementPage() {
 
   const renderQuizRow = (quiz: QuizSummary) => (
     <Card hover key={quiz.id}>
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h3 className="font-semibold text-sm text-[var(--text-primary)]">{quiz.title}</h3>
@@ -329,7 +335,7 @@ export default function QuizManagementPage() {
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
       {/* Header */}
-      <motion.div variants={fadeUp} className="flex items-center justify-between">
+      <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-[var(--text-primary)]">Quiz Management</h2>
           <p className="text-sm text-[var(--text-tertiary)] mt-0.5">
@@ -436,7 +442,7 @@ export default function QuizManagementPage() {
             value={genDocumentId}
             onChange={(e) => setGenDocumentId(e.target.value)}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
               label="Difficulty"
               options={difficultyOptions}
@@ -458,6 +464,37 @@ export default function QuizManagementPage() {
             value={genTopic}
             onChange={(e) => setGenTopic(e.target.value)}
           />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Mode"
+              options={[
+                { value: 'practice', label: 'Practice (formative)' },
+                { value: 'test', label: 'Test (proctored, CIE)' },
+              ]}
+              value={genMode}
+              onChange={(e) => setGenMode(e.target.value as 'practice' | 'test')}
+            />
+            {genMode === 'test' && (
+              <Select
+                label="CIE component"
+                options={[
+                  { value: 'test_1', label: 'Test 1' },
+                  { value: 'test_2', label: 'Test 2' },
+                  { value: 'quiz_1', label: 'Quiz 1' },
+                  { value: 'quiz_2', label: 'Quiz 2' },
+                ]}
+                value={genCie}
+                onChange={(e) => setGenCie(e.target.value as 'quiz_1' | 'quiz_2' | 'test_1' | 'test_2')}
+              />
+            )}
+          </div>
+          {genMode === 'test' && (
+            <p className="text-[11px] text-[var(--text-tertiary)] leading-snug">
+              Test mode adds per-question marks + CO tags, runs fullscreen + webcam proctored,
+              allows a single attempt, and feeds the subject's CIE.
+            </p>
+          )}
 
           <p className="text-[11px] text-[var(--text-tertiary)] leading-snug">
             The AI keeps cooking in the background — close this and keep working;

@@ -1,4 +1,5 @@
 import { clsx } from 'clsx'
+import { useIsMobile } from '../../hooks/useMediaQuery'
 
 export interface ScoreRingProps {
   score?: number
@@ -10,11 +11,14 @@ export interface ScoreRingProps {
 
 export default function ScoreRing({
   score = 0,
-  size = 120,
+  size: sizeProp,
   strokeWidth = 8,
   label,
   className,
 }: ScoreRingProps) {
+  const isMobile = useIsMobile()
+  // Shrink on phones unless the caller pinned an explicit size.
+  const size = sizeProp ?? (isMobile ? 96 : 120)
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const offset = circumference - (score / 100) * circumference

@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from app.models.gamification import XPEvent, XPEventType
 from app.models.quiz import Difficulty, Quiz, QuizAttempt
 from app.models.user import StudentProfile, Subject, User
+from app.services import enrollment
 
 logger = logging.getLogger(__name__)
 
@@ -89,10 +90,12 @@ def build_task_feed(db: Session, user: User) -> list[TaskItem]:
         ).all()
     )
 
+    enrolled_subject_ids = enrollment.enrolled_subject_ids_for_student(db, user.id)
     unattempted_rows = db.execute(
         select(Quiz, Subject)
         .join(Subject, Quiz.subject_id == Subject.id)
         .where(Quiz.is_published.is_(True))
+        .where(Quiz.subject_id.in_(enrolled_subject_ids))  # enrollment gate
         .where(Quiz.id.notin_(attempted_quiz_ids) if attempted_quiz_ids else Quiz.is_published.is_(True))
         .order_by(Quiz.created_at.desc())
         .limit(20)

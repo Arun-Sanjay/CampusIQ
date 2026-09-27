@@ -56,6 +56,7 @@ from app.models.quiz import (  # noqa: E402
 from app.models.user import (  # noqa: E402
     StudentProfile,
     Subject,
+    SubjectEnrollment,
     TeacherProfile,
     User,
     UserRole,
@@ -404,13 +405,14 @@ RESUME_CONTENT: dict = {
 
 
 def get_or_create_user(
-    db, *, email: str, full_name: str, role: UserRole, hashed: str
+    db, *, email: str, username: str, full_name: str, role: UserRole, hashed: str
 ) -> User:
-    """Idempotent upsert keyed on email."""
+    """Idempotent upsert keyed on email. Backfills username on existing rows."""
     user = db.scalar(select(User).where(User.email == email))
     if user is None:
         user = User(
             email=email,
+            username=username,
             full_name=full_name,
             role=role,
             hashed_password=hashed,
@@ -419,7 +421,24 @@ def get_or_create_user(
         db.add(user)
         db.flush()
         logger.info("created user %s (%s)", email, role.value)
+    elif not getattr(user, "username", None):
+        user.username = username
+        db.flush()
     return user
+
+
+def ensure_enrollment(db, *, student: User, subject: Subject) -> None:
+    """Enroll the demo student into a subject so its quizzes/announcements stay
+    visible now that content is enrollment-gated. Idempotent."""
+    existing = db.scalar(
+        select(SubjectEnrollment).where(
+            SubjectEnrollment.subject_id == subject.id,
+            SubjectEnrollment.student_id == student.id,
+        )
+    )
+    if existing is None:
+        db.add(SubjectEnrollment(subject_id=subject.id, student_id=student.id))
+        db.flush()
 
 
 def ensure_student_profile(db, user: User) -> StudentProfile:
@@ -671,6 +690,7 @@ def seed(*, reset: bool, with_rag: bool) -> None:
         teacher_a = get_or_create_user(
             db,
             email=EMAILS["teacher_a"],
+            username="alice.reddy",
             full_name="Alice Reddy",
             role=UserRole.TEACHER,
             hashed=hashed,
@@ -678,6 +698,7 @@ def seed(*, reset: bool, with_rag: bool) -> None:
         teacher_b = get_or_create_user(
             db,
             email=EMAILS["teacher_b"],
+            username="bharat.iyer",
             full_name="Bharat Iyer",
             role=UserRole.TEACHER,
             hashed=hashed,
@@ -685,6 +706,7 @@ def seed(*, reset: bool, with_rag: bool) -> None:
         student = get_or_create_user(
             db,
             email=EMAILS["student"],
+            username="demo.student",
             full_name="Demo Student",
             role=UserRole.STUDENT,
             hashed=hashed,
@@ -692,6 +714,7 @@ def seed(*, reset: bool, with_rag: bool) -> None:
         admin = get_or_create_user(
             db,
             email=EMAILS["admin"],
+            username="demo.admin",
             full_name="Demo Admin",
             role=UserRole.ADMIN,
             hashed=hashed,
@@ -714,6 +737,9 @@ def seed(*, reset: bool, with_rag: bool) -> None:
                 branch=spec["branch"],
                 semester=spec["semester"],
             )
+            # Enroll the demo student so this subject's quizzes/announcements
+            # stay visible under the new enrollment gating.
+            ensure_enrollment(db, student=student, subject=subject)
             for q_spec in spec["quizzes"]:
                 quiz = get_or_create_quiz(
                     db,

@@ -26,6 +26,7 @@ import Input from '../../components/ui/Input'
 import TextArea from '../../components/ui/TextArea'
 import StatCard from '../../components/dashboard/StatCard'
 import { ApiError, gamificationApi } from '../../api/client'
+import { useAuthStore } from '../../store/authStore'
 import type { PublicProfileResponse, Tier } from '../../types'
 
 const stagger: Variants = { animate: { transition: { staggerChildren: 0.05 } } }
@@ -58,6 +59,7 @@ interface Pillar {
 }
 
 export default function ProfilePage() {
+  const username = useAuthStore((s) => s.user?.username)
   const [profile, setProfile] = useState<PublicProfileResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -164,7 +166,7 @@ export default function ProfilePage() {
       {/* Header */}
       <motion.div variants={fadeUp}>
         <Card>
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-4 sm:gap-5 flex-wrap">
             <Avatar name={profile.name} size="xl" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-3 flex-wrap">
@@ -174,6 +176,14 @@ export default function ProfilePage() {
                 </Badge>
                 {profile.rank != null && <Badge size="sm">#{profile.rank}</Badge>}
               </div>
+              {username && (
+                <div className="mt-1 text-sm">
+                  <span className="font-medium text-[var(--text-primary)]">@{username}</span>
+                  <span className="text-[var(--text-tertiary)] text-xs ml-2">
+                    share this with your teachers so they can add you to their classes
+                  </span>
+                </div>
+              )}
               <p className="text-sm text-[var(--text-secondary)] mt-1">
                 {profile.branch && profile.semester
                   ? `${profile.branch} · Semester ${profile.semester}`
@@ -181,7 +191,7 @@ export default function ProfilePage() {
                 {profile.cgpa != null && ` · CGPA ${profile.cgpa.toFixed(1)}`}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
               <Button variant="secondary" icon={Edit} size="sm" onClick={openEdit}>
                 Edit
               </Button>
@@ -209,7 +219,7 @@ export default function ProfilePage() {
       </motion.div>
 
       {/* Stat cards */}
-      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-4">
+      <motion.div variants={fadeUp} className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <StatCard label="CAMPUSIQ SCORE" value={profile.campus_iq_score.toFixed(0)} icon={Award} />
         <StatCard label="TOTAL XP" value={profile.xp_total.toLocaleString()} icon={Zap} />
         <StatCard label="LEVEL" value={String(profile.current_level)} icon={Flame} />

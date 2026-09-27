@@ -1,22 +1,23 @@
 # CampusIQ — Claude orientation
 
-CampusIQ is a monorepo for an AI-assisted academic + placement-prep platform built for engineering students at RVCE. Single SPA frontend, single FastAPI backend, role-based experiences for **student / teacher / admin**. It started as a 21-phase build and has since grown past it (coding platform, DSA coach + curriculum, knowledge editor, per-subject enrollment, usernames). This file is the orientation you need before touching code; deeper rules live in `frontend/CLAUDE.md` and `backend/CLAUDE.md`.
+CampusIQ is a monorepo for an AI-assisted academic + placement-prep platform built for engineering students at RVCE. Single SPA frontend, single FastAPI backend, role-based experiences for **student / teacher / admin**. It started as a 21-phase build and has since grown well past it — coding platform + DSA coach + a 376-problem DSA curriculum, knowledge editor, per-subject enrollment, usernames, **proctored quizzes**, and an **AI answer-sheet auto-grader** (Claude-vision OCR + grading → RVCE-style CIE/SEE marks, CO attainment, SGPA/CGPA). This file is the orientation you need before touching code; deeper rules live in `frontend/CLAUDE.md` and `backend/CLAUDE.md`.
 
 ## Canonical docs (read these before doing real work)
 
-- **The live code + `git log` are the real source of truth.** The product is well past the original plan; when a planning doc and the code disagree, trust the code.
-- `PHASES.md` — the 21-phase build narrative with per-phase file lists and verification notes. Good for the algorithm-to-syllabus story, but the **status table at the top is stale**: phases 20 (Voice Interview + Confidence Coach) and 21 (Boss Battles + TCP notifications + public recruiter profile) are marked "Pending" yet are fully built and shipped, and the doc has **no record at all** of the post-phase-21 work (coding platform, DSA coach, DSA curriculum, knowledge editor, enrollment + usernames, spread-schedule). Don't trust its table or its "5 themes" Phase-1 text.
-- `DEMO.md` — the 10-minute demo runbook + pre-flight checklist, rewritten for the **hosted Render + Vercel + Supabase** stack. Treat it as the spec for the user-visible product surface and the canonical demo-account list.
+- **The live code + `git log` are the real source of truth, and `main` usually has a large amount of uncommitted work in flight** (run `git status` first — the grading subsystem, enrollment module, and quiz proctoring all currently live as uncommitted/untracked files). When a planning doc and the code disagree, trust the code.
+- `PHASES.md` — the 21-phase build narrative with per-phase file lists and verification notes. Good for the algorithm-to-syllabus story, but the **status table at the top is stale**, and the doc has **no record at all** of the large post-phase-21 body of work: coding platform, DSA coach, the 38-pattern/376-problem DSA curriculum, knowledge editor, enrollment + usernames, spread-schedule, **proctored quizzes, and the AI answer-sheet grading subsystem**. Don't trust its table or its "5 themes" Phase-1 text.
+- `DEMO.md` — the 10-minute demo runbook + pre-flight checklist, written for the **hosted Render + Vercel + Supabase** stack. Treat it as the spec for the user-visible product surface and the canonical demo-account list (**4 accounts**, password `DemoPass123`).
 - `HOSTING.md` — end-to-end deploy guide (Render backend, Vercel frontend, Supabase Postgres, keep-warm). See "Deployment" below.
 - `plan_phase2.md` — DSA Coach "Phase 2" plan. **Part A (38-pattern / 376-problem curriculum + pattern UI) is DONE and verified; Part B (a Manifest V3 "Claude-in-Chrome"-style LeetCode extension) is the only unbuilt piece.**
+- `grading_mdfiles/` — **untracked local reference** for the auto-grader: `grading_feature_spec.md` (the spec the pure grade-engine tests validate against), the RVCE academic `Handbook_*.pdf` (the CIE/SEE pass-gates + 10-point grade table are modeled on it), and sample scheme PDFs used while building. Not part of the deployed app.
 - `README.md` — outdated scaffold-era overview ("scaffold-only, no auth/models/workflows"). **Entirely false today** — useful only for the high-level role framing.
 
 ## Stack at a glance
 
-- **Frontend:** React 19.2, Vite 8, TypeScript 6, Tailwind 3.4, Zustand 5, React Router 7.13, Framer Motion 12, Recharts 3, lucide-react 1.7, react-markdown 10 + remark-gfm 4, Mermaid 11. Coding platform adds **`@monaco-editor/react` (code editor) + `pyodide` (in-browser Python judge)**; Confidence Coach adds **`@mediapipe/tasks-vision`**; the landing page uses `gsap` + `@tsparticles/*`.
-- **Backend:** FastAPI 0.135, SQLAlchemy 2 (sync), Alembic, Pydantic v2, PyJWT + bcrypt. SQLite locally, Supabase Postgres + pgvector in prod.
-- **AI / speech:** Anthropic SDK (Claude). **ElevenLabs is the primary speech path — Scribe (`scribe_v1`) ASR + TTS;** OpenAI Whisper is an opt-in ASR fallback. Sentence Transformers (`all-MiniLM-L6-v2`, 384-dim) for embeddings.
-- **Python:** local venv is **3.14** (`backend/.venv`); the Docker image and CI pin **3.12**. Don't assume they match.
+- **Frontend:** React 19.2, Vite 8, TypeScript 6, Tailwind 3.4, Zustand 5, React Router 7.13, Framer Motion 12, Recharts 3, lucide-react 1.7, react-markdown 10 + remark-gfm 4, Mermaid 11. Coding platform adds **`@monaco-editor/react` (code editor) + `pyodide` (in-browser Python judge, pinned v0.29.4)**; Confidence Coach + quiz proctoring use **`@mediapipe/tasks-vision`**; the landing page uses `gsap` + `@tsparticles/*`.
+- **Backend:** FastAPI 0.135, SQLAlchemy 2 (sync), Alembic, Pydantic v2, PyJWT + bcrypt. **PyMuPDF (`fitz`)** rasterizes PDFs to page images (answer-sheet grading + text extraction). SQLite locally, Supabase Postgres + pgvector in prod.
+- **AI / speech:** Anthropic SDK (Claude), including **Claude vision (multimodal)** for answer-sheet OCR + grading. **ElevenLabs is the primary speech path — Scribe (`scribe_v1`) ASR + TTS;** OpenAI Whisper is an opt-in ASR fallback. Sentence Transformers (`all-MiniLM-L6-v2`, 384-dim) for embeddings.
+- **Python:** local venv is **3.14** (`backend/.venv`); the Docker image and CI pin **3.12**. There's no `.python-version`, and the Dockerfile comment claiming "3.12 locally" is itself stale — don't assume they match.
 - **Infra:** GitHub Actions CI (`.github/workflows/ci.yml`). **Backend deploys to Render (Docker), frontend to Vercel, DB on Supabase** — see "Deployment".
 
 ## Layout
@@ -24,8 +25,9 @@ CampusIQ is a monorepo for an AI-assisted academic + placement-prep platform bui
 ```
 campusiq/                         # ← the git repo (parent dir is NOT a repo; see below)
 ├── PHASES.md, DEMO.md, HOSTING.md, plan_phase2.md, README.md, image-prompts.md
+├── grading_mdfiles/              # untracked: grading spec + RVCE handbook + sample scheme PDFs
 ├── render.yaml                   # Render Blueprint (backend web service)
-├── docker-compose.yml            # real now — defines the `backend` service for local prod-parity
+├── docker-compose.yml            # defines the `backend` service for local prod-parity
 ├── .github/workflows/ci.yml
 ├── docs/screenshots/             # landing + login images (no prose docs)
 ├── frontend/                     # Vite SPA — see frontend/CLAUDE.md
@@ -47,7 +49,7 @@ Health: `curl http://127.0.0.1:8000/health`. Frontend is reached at **`http://lo
 ## Locked design decisions (do not relitigate)
 
 - **No LangGraph / LangChain.** The mock interview is a hand-rolled Python state machine in `backend/app/services/mock_interview.py`.
-- **No Celery / RQ / Dramatiq.** FastAPI `BackgroundTasks` for everything until something is actually too slow. `redis` and `celery` are in `requirements.txt` but nothing wires them.
+- **No Celery / RQ / Dramatiq.** FastAPI `BackgroundTasks` for everything (document processing, quiz generation, embeddings, and answer-sheet grading) until something is actually too slow. `redis` and `celery` are in `requirements.txt` but nothing wires them.
 - **Frontend-first.** UI was built with mock data first; backend wiring came later. When wiring a new feature, check the existing page's mock shape and match the API contract to it.
 - **Sentence Transformers locally** for embeddings, with a **SQLite cosine fallback** (`backend/app/services/vector_search.py`) so RAG works on the dev DB without pgvector.
 
@@ -55,10 +57,10 @@ Health: `curl http://127.0.0.1:8000/health`. Frontend is reached at **`http://lo
 
 Two layers protect the AI budget:
 
-1. **Model selection.** Every dev/test Claude call uses **Haiku 4.5** (`claude-haiku-4-5-20251001`); **Opus 4.6** (`claude-opus-4-6`) is reserved for the single live demo. The switch is `USE_PRODUCTION_MODEL` in `backend/.env`; the active model is read via `settings.active_anthropic_model` (`backend/app/core/config.py`). Default is `False` — leave it that way unless explicitly demoing. Never hardcode a model string at a call site.
-2. **Per-user rate limit.** A token-bucket dependency (`claude_rate_limit`, default `CLAUDE_REQUESTS_PER_MINUTE=20`) guards every Claude-touching route (429 + `Retry-After`). See `backend/CLAUDE.md`.
+1. **Model selection.** Every dev/test Claude call uses **Haiku 4.5** (`claude-haiku-4-5-20251001`); **Opus 4.6** (`claude-opus-4-6`) is reserved for the single live demo. The switch is `USE_PRODUCTION_MODEL` in `backend/.env`; the active model is read via `settings.active_anthropic_model` (`backend/app/core/config.py`). Default is `False` — leave it that way unless explicitly demoing. Never hardcode a model string at a call site. All four `claude_client` entry points (`generate_completion`, `generate_completion_multiturn`, `stream_completion`, and the newer **`generate_completion_vision`** used by the grader) read `active_anthropic_model` and degrade gracefully.
+2. **Per-user rate limit.** A token-bucket dependency (`claude_rate_limit`, default `CLAUDE_REQUESTS_PER_MINUTE=20`) guards every Claude-touching route (429 + `Retry-After`). The answer-sheet grader is additionally **serialized per-exam with an in-process lock** so a batch upload makes one vision call at a time. See `backend/CLAUDE.md`.
 
-ElevenLabs (Scribe ASR + TTS) and Whisper are similarly metered. Both are optional — without keys the app falls back to the browser's native `speechSynthesis` / `SpeechRecognition`. Don't burn the ElevenLabs starter quota during dev; the **text-mode** interview is the right path for iterating.
+ElevenLabs (Scribe ASR + TTS) and Whisper are similarly metered. Both are optional — without keys the app falls back to the browser's native `speechSynthesis` / `SpeechRecognition`. Don't burn the ElevenLabs starter quota during dev; the **text-mode** interview is the right path for iterating. Likewise, grading sends real images to Claude vision — keep `USE_PRODUCTION_MODEL=False` while iterating.
 
 ## Theming (only 3 themes exist)
 
@@ -66,10 +68,10 @@ ElevenLabs (Scribe ASR + TTS) and Whisper are similarly metered. Both are option
 
 ## Feature map (what's actually wired today)
 
-- **Learn Mode (student):** AI Note Assistant (RAG chat, streaming, citations, Explain/Diagram/Questions modes + Mermaid), CollegeGPT, Quizzes (AI-generated, adaptive, weak-areas), study Schedule planner (spread + backtracking strategies), Crash Mode, **Coding platform** (Monaco + Pyodide in-browser judge, 5 judge problems + the 38-pattern curriculum) with the **DSA Coach** (Socratic hint-ladder + LeetCode redirect).
+- **Learn Mode (student):** AI Note Assistant (RAG chat, streaming, citations, Explain/Diagram/Questions modes + Mermaid), CollegeGPT, Quizzes (AI-generated, adaptive, weak-areas; **practice vs proctored test modes**), study Schedule planner (spread + backtracking strategies), Crash Mode, **Coding platform** (Monaco + Pyodide in-browser judge for the 5 seed problems + the **38-pattern / 376-problem DSA curriculum** rendered as a pattern grid → pattern detail → problem, with a LeetCode redirect for non-judge problems) and the **DSA Coach** (Socratic hint-ladder), plus **My Grades** (read-only transcript: CIE/SEE, per-CO attainment, letter grade, SGPA/CGPA).
 - **Place Mode (student):** Resume Builder (AI coach, ATS score, GitHub import, print-to-PDF), Skill-Gap / Adaptive Learning Engine (Dijkstra + Knapsack + Prim's), Mock Interview (text **and** voice, 4 personas, 5 rounds), Confidence Coach (MediaPipe eye-contact/posture + speech metrics), Placement Chat, Job Tracker, Community.
 - **Gamification:** 4-pillar CampusIQ score, leaderboard, skill tree, badges, Boss Battles, public recruiter profile at `/p/:studentId`.
-- **Teacher:** subjects, **per-subject enrollment/roster**, documents, AI quiz authoring + scheduling, announcements, analytics, answer-similarity (Hamming) checker.
+- **Teacher:** subjects, **per-subject enrollment/roster (add students by username)**, documents, AI quiz authoring + scheduling (test-mode quizzes are proctored and feed CIE), announcements, analytics, answer-similarity (Hamming) checker, and the **AI Auto-Grader** — upload a marking scheme + scanned answer sheets, Claude vision does OCR + per-question grading, the teacher reviews/overrides, and the grade engine rolls it up to CIE/SEE marks, CO attainment, letter grades, SGPA/CGPA.
 - **Admin:** CollegeGPT corpus upload, **Knowledge Editor** (chunk CRUD + AI-mediated edit suggestions), user management, skill analytics, **live TCP-style notification delivery dashboard**.
 
 ## Deployment
@@ -84,7 +86,7 @@ ElevenLabs (Scribe ASR + TTS) and Whisper are similarly metered. Both are option
 
 - **Never add a `Co-Authored-By: Claude` trailer** to commit messages on this repo (or any of Arun's repos). Standing instruction.
 - **Never `git push` without explicit permission.** Remote is `https://github.com/Arun-Sanjay/CampusIQ.git`.
-- Stage specific files (`git add path/to/file`), not `git add -A` — the **parent** folder holds many large screenshots and a hero `.mov`, and `main` often carries unrelated in-progress changes.
+- Stage specific files (`git add path/to/file`), not `git add -A` — the **parent** folder holds many large screenshots and a hero `.mov`, and `main` often carries unrelated in-progress changes plus untracked subsystems (grading, enrollment, curriculum) that belong to different scopes.
 - **There are multiple active git worktrees** (run `git worktree list` to see the current set). As of this writing:
   - `campusiq/` → **`main`** (the primary worktree; this is where you usually are).
   - `campusiq-coding-learn/` → `claude/coding-learn-platform`.

@@ -36,6 +36,7 @@ import type { ProgressBarColor } from '../../components/ui/ProgressBar'
 import { useMediaRecorder } from '../../hooks/useMediaRecorder'
 import { useBrowserSpeechRecognition } from '../../hooks/useBrowserSpeechRecognition'
 import { useConfidenceTracker } from '../../hooks/useConfidenceTracker'
+import { useIsMobile } from '../../hooks/useMediaQuery'
 import { confidenceApi, ApiError, API_BASE_URL } from '../../api/client'
 import type {
   ConfidenceMetric,
@@ -109,7 +110,7 @@ function fillerVariant(count: number | null | undefined): { variant: BadgeVarian
   return { variant: 'danger', hint: 'Too many' }
 }
 
-function buildMetrics(latest: ConfidenceSessionResponse | null): Metric[] {
+function buildMetrics(latest: ConfidenceSessionResponse | null, includeVision = true): Metric[] {
   if (!latest) return []
   const eye = latest.eye_contact_score
   const posture = latest.posture_score
@@ -121,7 +122,10 @@ function buildMetrics(latest: ConfidenceSessionResponse | null): Metric[] {
   const fillerInfo = fillerVariant(filler)
   const paceInfo = paceVariant(pace)
 
-  return [
+  // Eye-contact + posture come from the MediaPipe tracker, which we don't run on
+  // phones — drop those tiles there so we never show stale/placeholder visuals.
+  const visionMetrics: Metric[] = includeVision
+    ? [
     {
       label: 'Eye Contact',
       value: eye ?? 0,
@@ -138,6 +142,11 @@ function buildMetrics(latest: ConfidenceSessionResponse | null): Metric[] {
       color: progressColor(posture),
       icon: Activity,
     },
+      ]
+    : []
+
+  return [
+    ...visionMetrics,
     {
       label: 'Filler Words',
       value: filler != null ? String(filler) : '—',
@@ -216,6 +225,10 @@ const DEFAULT_DRILLS = [
 ]
 
 export default function ConfidenceCoachPage() {
+  // On phones we degrade: MediaPipe is heavy GPU + large CDN downloads and the
+  // posture/eye-contact tiles aren't meaningful from a handheld camera. Mic
+  // feedback (transcript, pace, fillers, clarity) still works.
+  const isMobile = useIsMobile()
   // Live recording (video + audio)
   const recorder = useMediaRecorder({ video: true })
   const speech = useBrowserSpeechRecognition()
@@ -290,21 +303,22 @@ export default function ConfidenceCoachPage() {
     }
     // Spin up MediaPipe tracking once the camera stream is live so we can
     // sample eye-contact + posture per frame and replace the placeholders.
-    if (recorder.stream) {
+    // Skipped on mobile — too heavy, and we hide those tiles there.
+    if (!isMobile && recorder.stream) {
       void tracker.start(recorder.stream)
     }
-  }, [previewUrl, recorder, speech, tracker])
+  }, [previewUrl, recorder, speech, tracker, isMobile])
 
   // The recorder.stream becomes available a tick after recorder.start() — start
-  // tracking as soon as it's ready, in case start() raced ahead.
+  // tracking as soon as it's ready, in case start() raced ahead. Never on mobile.
   useEffect(() => {
-    if (recorder.state === 'recording' && recorder.stream && !tracker.running) {
+    if (!isMobile && recorder.state === 'recording' && recorder.stream && !tracker.running) {
       void tracker.start(recorder.stream)
     }
     // We deliberately skip `tracker` in deps to avoid retriggering when
     // running flips back to false at end of session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recorder.state, recorder.stream])
+  }, [recorder.state, recorder.stream, isMobile])
 
   const handleStop = useCallback(async () => {
     if (speech.supported) speech.stop()
@@ -358,7 +372,7 @@ export default function ConfidenceCoachPage() {
   const isPreparing = recorder.state === 'preparing'
   const recordingError = recorder.error
   const speechError = speech.error
-  const metrics = useMemo(() => buildMetrics(latest), [latest])
+  const metrics = useMemo(() => buildMetrics(latest, !isMobile), [latest, isMobile])
   const timelinePoints = useMemo(
     () => (timeline ? buildTimeline(timeline.sessions) : []),
     [timeline],
@@ -432,7 +446,7 @@ export default function ConfidenceCoachPage() {
                 REC · {formatSeconds(recorder.elapsed)}
               </div>
             )}
-            {isRecording && tracker.available && (
+            {isRecording && !isMobile && tracker.available && (
               <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-black/55 text-white text-[11px] tabular-nums shadow-lg">
                 {tracker.liveEyeContact != null && tracker.livePosture != null ? (
                   <>
@@ -488,6 +502,13 @@ export default function ConfidenceCoachPage() {
               <span className="text-xs text-[var(--text-tertiary)]">Scoring with Claude…</span>
             )}
           </div>
+
+          {isMobile && (
+            <div className="mt-3 flex items-start gap-2 p-3 rounded-lg border border-[var(--border-default)] bg-[var(--bg-secondary)] text-xs text-[var(--text-secondary)]">
+              <Eye className="h-3.5 w-3.5 mt-0.5 shrink-0 text-[var(--text-tertiary)]" />
+              <span>Posture &amp; eye-contact analysis needs a laptop webcam — mic feedback still works.</span>
+            </div>
+          )}
 
           {(recordingError || speechError || submitError) && (
             <div className="mt-3 flex items-start gap-2 p-3 rounded-lg border border-danger/30 bg-danger/5 text-danger text-sm">

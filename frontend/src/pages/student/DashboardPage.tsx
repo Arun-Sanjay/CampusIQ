@@ -139,9 +139,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex gap-6">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] items-start">
       {/* Main Content */}
-      <div className="flex-1 min-w-0 space-y-6">
+      <div className="min-w-0 space-y-6">
         {/* Identity Badge */}
         <motion.div
           initial={fadeUpInitial}
@@ -159,7 +159,7 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Stat Cards */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {stats.map((stat, i) => (
             <motion.div
               key={stat.label}
@@ -175,7 +175,7 @@ export default function DashboardPage() {
         {/* Score Detail */}
         <motion.div initial={fadeUpInitial} animate={fadeUpAnimate(0.35)}>
           <Card padding={false} className="glow-border">
-            <div className="p-5 flex items-center gap-8">
+            <div className="p-5 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
               <ScoreRing score={Math.round(data.score.total)} label="CampusIQ" />
               <div className="flex-1 space-y-3">
                 {pillars.map((p) => (
@@ -252,7 +252,7 @@ export default function DashboardPage() {
 
       {/* Right Sidebar */}
       <motion.div
-        className="w-72 shrink-0 space-y-6"
+        className="space-y-6"
         initial={{ x: 20 }}
         animate={{ x: 0 }}
         transition={{ delay: 0.3, duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}

@@ -52,20 +52,23 @@ export default function Modal({
   return createPortal(
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center p-0 md:items-center md:p-4"
       onClick={(e: MouseEvent<HTMLDivElement>) => { if (e.target === overlayRef.current) onClose() }}
     >
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
       <div
         className={clsx(
-          'relative w-full rounded-card fade-in flex flex-col',
+          'relative w-full fade-in flex flex-col',
+          'rounded-t-2xl md:rounded-card',
           'bg-[var(--bg-elevated)] border border-[var(--border-default)]',
-          'max-h-[calc(100vh-2rem)]',
+          'max-h-[calc(100dvh-3rem)] md:max-h-[calc(100dvh-2rem)]',
           sizes[size],
           className,
         )}
         style={{ boxShadow: 'var(--shadow-elevated)' }}
       >
+        {/* Mobile grab handle */}
+        <div className="md:hidden mx-auto mt-2 h-1.5 w-10 rounded-full bg-[var(--border-strong)] shrink-0" />
         {/* Header is pinned so the X stays reachable even when the body
             scrolls (e.g. a long quiz review). */}
         <div className="flex items-center justify-between p-4 border-b border-[var(--border-default)] shrink-0">
@@ -78,9 +81,9 @@ export default function Modal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="p-4 overflow-y-auto flex-1 min-h-0">{children}</div>
+        <div className="p-4 overflow-y-auto scroll-touch flex-1 min-h-0">{children}</div>
         {footer && (
-          <div className="px-4 py-3 border-t border-[var(--border-default)] shrink-0">
+          <div className="px-4 py-3 border-t border-[var(--border-default)] shrink-0 pb-safe">
             {footer}
           </div>
         )}

@@ -52,6 +52,15 @@ export interface ProblemDetail {
   skill_node_names: string[]
   leetcode_url: string
   user_status: UserProblemStatus
+  // Phase 2 curriculum context. `has_editor` is false for LeetCode-only
+  // curriculum problems (the in-app Pyodide editor toggle is hidden for those).
+  source: string
+  has_editor: boolean
+  lc_number: number | null
+  priority: string | null
+  is_premium: boolean
+  pattern_slug: string | null
+  pattern_name: string | null
 }
 
 export interface ProblemRunnerPayload {
@@ -108,6 +117,51 @@ export interface MarkSolvedResponse {
   xp_earned: number
   new_level?: number | null
   leveled_up: boolean
+}
+
+// ── Phase 2: pattern curriculum ──────────────────────────────────────────────
+
+export type CodingTrack = 'core' | 'advanced'
+
+export interface PatternListItem {
+  slug: string
+  name: string
+  track: CodingTrack
+  tier: number
+  order_num: number
+  core_idea: string
+  recognize_when: string
+  difficulty_span: string
+  problem_count: number
+  solved_count: number
+}
+
+export interface PatternProblemRow {
+  id: string
+  slug: string
+  title: string
+  difficulty: CodingDifficulty
+  seq: number | null
+  lc_number: number | null
+  priority: string | null
+  is_premium: boolean
+  also_appears_in: string | null
+  leetcode_url: string
+  has_editor: boolean
+  user_status: UserProblemStatus
+}
+
+export interface PatternWithProblems {
+  slug: string
+  name: string
+  track: CodingTrack
+  tier: number
+  core_idea: string
+  recognize_when: string
+  difficulty_span: string
+  problem_count: number
+  solved_count: number
+  problems: PatternProblemRow[]
 }
 
 export interface ListProblemsOptions {

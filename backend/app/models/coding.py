@@ -10,11 +10,36 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, JSON, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models._enum_helper import enum_values
+
+
+class CodingPattern(Base):
+    """A DSA pattern (technique) from the curriculum — e.g. "Two Pointers",
+    "Sliding Window". Problems are grouped by the technique that solves them and
+    ordered easy->hard inside each pattern. Surfaced as clickable boxes in the
+    Coding section."""
+
+    __tablename__ = "coding_patterns"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    track: Mapped[str] = mapped_column(String(20), nullable=False, default="core")  # core | advanced
+    tier: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    order_num: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    core_idea: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    recognize_when: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    difficulty_span: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    # Denormalized count from the curriculum (deduped). Kept for display; the
+    # live per-pattern count is computed from the problems table at read time.
+    problem_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class CodingDifficulty(str, enum.Enum):
@@ -88,6 +113,26 @@ class CodingProblem(Base):
     # Canonical LeetCode problem URL for the "Open on LeetCode" redirect. When
     # null, the API derives `https://leetcode.com/problems/<slug>/` from the slug.
     leetcode_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    # ── Curriculum (Phase 2) ──
+    # `source` distinguishes the 5 in-app-judge seed problems ("seed_inapp",
+    # have starter code + test cases) from the LeetCode-only curriculum problems
+    # ("curriculum", judge fields empty). The frontend shows the Code Editor
+    # toggle only for seed_inapp problems.
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="seed_inapp", server_default="seed_inapp"
+    )
+    pattern_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("coding_patterns.id", ondelete="SET NULL"), index=True
+    )
+    track: Mapped[str | None] = mapped_column(String(20))  # core | advanced
+    tier: Mapped[int | None] = mapped_column(Integer)
+    seq: Mapped[int | None] = mapped_column(Integer)  # order within the pattern
+    lc_number: Mapped[int | None] = mapped_column(Integer)  # LeetCode problem #
+    priority: Mapped[str | None] = mapped_column(String(20))  # high | medium | low
+    is_premium: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    free_alternative: Mapped[str | None] = mapped_column(String(255))
+    also_appears_in: Mapped[str | None] = mapped_column(String(120))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -14,6 +14,7 @@ import Badge from '../../components/ui/Badge'
 import Button from '../../components/ui/Button'
 import Select from '../../components/ui/Select'
 import ProgressBar from '../../components/ui/ProgressBar'
+import { ResponsiveTable, type ResponsiveColumn } from '../../components/ui'
 import { ApiError, collegeDocumentsApi } from '../../api/client'
 import type { CollegeDocument, CollegeDocumentCategory } from '../../types'
 
@@ -192,6 +193,102 @@ export default function CollegeDocsPage() {
     return { original, compressed, savings }
   }, [documents])
 
+  const columns: ResponsiveColumn<CollegeDocument>[] = [
+    {
+      key: 'title',
+      header: 'File Name',
+      primary: true,
+      render: (doc) => (
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-[var(--text-tertiary)] shrink-0" />
+          <div className="min-w-0">
+            <div className="font-medium text-[var(--text-primary)] truncate">{doc.title}</div>
+            <div className="text-[10px] text-[var(--text-tertiary)] truncate">{doc.file_name}</div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      render: (doc) => (
+        <Badge variant={categoryVariant[doc.document_category]} size="sm">
+          {categoryLabel[doc.document_category]}
+        </Badge>
+      ),
+    },
+    {
+      key: 'uploaded',
+      header: 'Uploaded',
+      className: 'text-[var(--text-tertiary)]',
+      render: (doc) => formatDate(doc.created_at),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (doc) => (
+        <Badge variant={statusVariant[doc.processing_status] || 'default'} size="sm" dot>
+          {doc.processing_status}
+        </Badge>
+      ),
+    },
+    {
+      key: 'chunks',
+      header: 'Chunks',
+      headerClassName: 'text-right',
+      className: 'text-right text-[var(--text-secondary)] tabular-nums',
+      render: (doc) => doc.compression_stats?.chunk_count ?? 0,
+    },
+    {
+      key: 'original',
+      header: 'Original',
+      headerClassName: 'text-right',
+      className: 'text-right text-[var(--text-secondary)] tabular-nums',
+      render: (doc) => formatBytes(doc.compression_stats?.original_bytes),
+    },
+    {
+      key: 'saved',
+      header: 'Saved',
+      headerClassName: 'text-right',
+      className: 'text-right text-success tabular-nums',
+      render: (doc) =>
+        doc.compression_stats?.savings_percent
+          ? `${doc.compression_stats.savings_percent}%`
+          : '—',
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      headerClassName: 'text-right',
+      render: (doc) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={RefreshCw}
+            onClick={() => void handleReprocess(doc.id)}
+            title="Reprocess"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Eye}
+            title="View summary"
+            disabled={!doc.summary}
+            onClick={() => doc.summary && window.alert(doc.summary)}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Trash2}
+            onClick={() => void handleDelete(doc.id)}
+            title="Delete"
+          />
+        </div>
+      ),
+    },
+  ]
+
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
       {error && (
@@ -252,7 +349,7 @@ export default function CollegeDocsPage() {
       </motion.div>
 
       {/* Category Filter */}
-      <motion.div variants={fadeUp} className="w-64">
+      <motion.div variants={fadeUp} className="w-full sm:w-64">
         <Select
           options={categoryOptions}
           value={categoryFilter}
@@ -268,129 +365,21 @@ export default function CollegeDocsPage() {
           <CardHeader className="px-4 pt-4">
             <CardTitle>College Documents</CardTitle>
           </CardHeader>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border-default)]">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                    File Name
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                    Category
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                    Uploaded
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                    Chunks
-                  </th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                    Original
-                  </th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                    Saved
-                  </th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-[var(--text-tertiary)] uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-[var(--text-tertiary)]">
-                      <Loader2 className="h-4 w-4 inline animate-spin mr-2" />
-                      Loading…
-                    </td>
-                  </tr>
-                )}
-                {!loading && visibleDocs.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-[var(--text-tertiary)]">
-                      No college documents yet. Upload one above to get started.
-                    </td>
-                  </tr>
-                )}
-                {visibleDocs.map((doc) => (
-                  <tr
-                    key={doc.id}
-                    className="border-b border-[var(--border-default)] last:border-0 hover:bg-[var(--bg-secondary)] transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-[var(--text-tertiary)] shrink-0" />
-                        <div className="min-w-0">
-                          <div className="font-medium text-[var(--text-primary)] truncate">
-                            {doc.title}
-                          </div>
-                          <div className="text-[10px] text-[var(--text-tertiary)] truncate">
-                            {doc.file_name}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge variant={categoryVariant[doc.document_category]} size="sm">
-                        {categoryLabel[doc.document_category]}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-[var(--text-tertiary)]">
-                      {formatDate(doc.created_at)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Badge
-                        variant={statusVariant[doc.processing_status] || 'default'}
-                        size="sm"
-                        dot
-                      >
-                        {doc.processing_status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right text-[var(--text-secondary)] tabular-nums">
-                      {doc.compression_stats?.chunk_count ?? 0}
-                    </td>
-                    <td className="px-4 py-3 text-right text-[var(--text-secondary)] tabular-nums">
-                      {formatBytes(doc.compression_stats?.original_bytes)}
-                    </td>
-                    <td className="px-4 py-3 text-right text-success tabular-nums">
-                      {doc.compression_stats?.savings_percent
-                        ? `${doc.compression_stats.savings_percent}%`
-                        : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={RefreshCw}
-                          onClick={() => void handleReprocess(doc.id)}
-                          title="Reprocess"
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={Eye}
-                          title="View summary"
-                          disabled={!doc.summary}
-                          onClick={() => doc.summary && window.alert(doc.summary)}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={Trash2}
-                          onClick={() => void handleDelete(doc.id)}
-                          title="Delete"
-                        />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            columns={columns}
+            rows={loading ? [] : visibleDocs}
+            rowKey={(doc) => doc.id}
+            empty={
+              loading ? (
+                <span>
+                  <Loader2 className="h-4 w-4 inline animate-spin mr-2" />
+                  Loading…
+                </span>
+              ) : (
+                'No college documents yet. Upload one above to get started.'
+              )
+            }
+          />
         </Card>
       </motion.div>
 

@@ -10,12 +10,13 @@ import logging
 import uuid
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.algorithm import NotificationType
 from app.models.content import Announcement, AnnouncementTarget
 from app.models.user import Subject, User, UserRole
+from app.services import enrollment
 from app.schemas.announcement import (
     AnnouncementCreate,
     AnnouncementResponse,
@@ -104,11 +105,18 @@ def list_announcements(
         if only_mine or subject_id is None:
             stmt = stmt.where(Announcement.author_id == user.id)
     elif user.role == UserRole.STUDENT:
-        # Students see all-broadcasts + college + any subject announcement
+        # Students see all-broadcasts + college-wide + subject announcements ONLY
+        # for subjects they're enrolled in.
         clauses = [Announcement.target == AnnouncementTarget.ALL]
         if user.college_id is not None:
             clauses.append(Announcement.college_id == user.college_id)
-        clauses.append(Announcement.target == AnnouncementTarget.SUBJECT)
+        enrolled = enrollment.enrolled_subject_ids_for_student(db, user.id)
+        clauses.append(
+            and_(
+                Announcement.target == AnnouncementTarget.SUBJECT,
+                Announcement.subject_id.in_(enrolled),
+            )
+        )
         stmt = stmt.where(or_(*clauses))
 
     rows = db.execute(stmt).all()
@@ -148,29 +156,51 @@ def create_announcement(
     db.commit()
     db.refresh(announcement)
 
-    # Fan out a real-time notification to every student (Phase 9). Failures
-    # here must never block the create flow.
+    # NOTE: the real-time fan-out to students is deliberately NOT done here.
+    # It writes one NotificationDelivery row per student (+ a WS ping), which
+    # against a remote DB takes seconds and would block (and visibly hang) the
+    # POST. The route schedules `notify_students_for_announcement` as a
+    # BackgroundTask so the create returns immediately.
+    return _to_response(announcement, author=user, subject=subject)
+
+
+def notify_students_for_announcement(announcement_id: uuid.UUID) -> None:
+    """BackgroundTask: fan out notifications for a just-created announcement.
+
+    Opens its own session (the request's is closed by the time this runs) —
+    same pattern as the document/grading background workers. Best-effort:
+    never raises (the announcement already exists regardless)."""
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
     try:
+        announcement = db.get(Announcement, announcement_id)
+        if announcement is None:
+            return
+        subject = db.get(Subject, announcement.subject_id) if announcement.subject_id else None
         _notify_students(db, announcement, subject)
     except Exception:  # noqa: BLE001
-        logger.exception("Failed to fan out notification for announcement %s", announcement.id)
-
-    return _to_response(announcement, author=user, subject=subject)
+        logger.exception("Failed to fan out notification for announcement %s", announcement_id)
+    finally:
+        db.close()
 
 
 def _notify_students(
     db: Session, announcement: Announcement, subject: Subject | None
 ) -> None:
-    """Broadcast a NotificationDelivery row + WebSocket push to every student.
+    """Push a NotificationDelivery + WebSocket ping to the right students.
 
-    Scope is intentionally simple — every student in the system gets the ping.
-    Refining by college / subject enrollment is a v2 problem.
+    Subject-targeted announcements go only to that subject's enrolled students;
+    ALL / COLLEGE broadcasts still go to every student.
     """
     from app.services import notifications
 
-    student_ids = list(
-        db.scalars(select(User.id).where(User.role == UserRole.STUDENT)).all()
-    )
+    if announcement.target == AnnouncementTarget.SUBJECT and subject is not None:
+        student_ids = enrollment.enrolled_student_ids_for_subject(db, subject.id)
+    else:
+        student_ids = list(
+            db.scalars(select(User.id).where(User.role == UserRole.STUDENT)).all()
+        )
     if not student_ids:
         return
 

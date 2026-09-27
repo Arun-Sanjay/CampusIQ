@@ -24,6 +24,7 @@ import {
 import Card, { CardHeader, CardTitle } from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import type { BadgeVariant } from '../../components/ui/Badge'
+import { ResponsiveTable, type ResponsiveColumn } from '../../components/ui'
 import StatCard from '../../components/dashboard/StatCard'
 import { ApiError, adminApi } from '../../api/client'
 import type {
@@ -87,7 +88,11 @@ function formatTime(iso: string | null): string {
 function formatLatency(ms: number | null): string {
   if (ms == null) return '—'
   if (ms < 1000) return `${ms} ms`
-  return `${(ms / 1000).toFixed(1)} s`
+  const s = ms / 1000
+  if (s < 60) return `${s.toFixed(1)} s`
+  if (s < 3600) return `${Math.round(s / 60)} m`
+  if (s < 86400) return `${Math.round(s / 3600)} h`
+  return `${Math.round(s / 86400)} d`
 }
 
 function humanType(type: string): string {
@@ -150,6 +155,93 @@ export default function NotificationStatusPage() {
     failed: 0,
     delivery_rate_percent: 0,
   }
+
+  const columns: ResponsiveColumn<NotificationDeliveryRow>[] = [
+    {
+      key: 'seq',
+      header: 'Seq',
+      className: 'font-mono text-[var(--text-tertiary)] tabular-nums',
+      render: (row) => `#${row.sequence_number}`,
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      primary: true,
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <Bell className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
+          <span className="text-[var(--text-primary)] font-medium">
+            {humanType(row.notification_type)}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'recipient',
+      header: 'Recipient',
+      className: 'text-[var(--text-secondary)]',
+      render: (row) => (
+        <>
+          <div className="text-[var(--text-primary)]">
+            {row.user_name ?? row.user_email ?? row.user_id.slice(0, 8)}
+          </div>
+          {row.user_email && (
+            <div className="text-[11px] text-[var(--text-tertiary)]">{row.user_email}</div>
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (row) => {
+        const badge = statusBadge(row.status)
+        return (
+          <Badge variant={badge.variant} size="sm" dot>
+            {badge.label}
+          </Badge>
+        )
+      },
+    },
+    {
+      key: 'retries',
+      header: 'Retries',
+      render: (row) => (
+        <span
+          className={clsx(
+            'font-medium tabular-nums',
+            row.retry_count >= 3 ? 'text-danger' : 'text-[var(--text-secondary)]',
+          )}
+        >
+          {row.retry_count}
+        </span>
+      ),
+    },
+    {
+      key: 'latency',
+      header: 'Latency',
+      className: 'text-[var(--text-secondary)] tabular-nums',
+      render: (row) => formatLatency(row.latency_ms),
+    },
+    {
+      key: 'last_sent',
+      header: 'Last Sent',
+      className: 'text-[var(--text-tertiary)] tabular-nums',
+      render: (row) => formatTime(row.last_sent_at),
+    },
+    {
+      key: 'acked_at',
+      header: 'Acked At',
+      className: 'text-[var(--text-tertiary)] tabular-nums',
+      render: (row) => formatTime(row.acked_at),
+    },
+  ]
+
+  const tableEmpty = loading
+    ? 'Loading…'
+    : activeFilter === 'All'
+      ? 'No notifications delivered yet. Post an announcement to see one fire.'
+      : `No ${activeFilter.toLowerCase()} notifications.`
 
   return (
     <motion.div className="space-y-6" variants={stagger} initial="initial" animate="animate">
@@ -237,94 +329,12 @@ export default function NotificationStatusPage() {
       {/* Notification Table */}
       <motion.div variants={fadeUp}>
         <Card padding={false}>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[var(--border-default)]">
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">Seq</th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">Type</th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">Recipient</th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">Status</th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">Retries</th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">Latency</th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">Last Sent</th>
-                  <th className="text-left px-4 py-3 text-[var(--text-tertiary)] font-medium">Acked At</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="px-4 py-10 text-center text-[var(--text-tertiary)]"
-                    >
-                      {loading
-                        ? 'Loading…'
-                        : activeFilter === 'All'
-                          ? 'No notifications delivered yet. Post an announcement to see one fire.'
-                          : `No ${activeFilter.toLowerCase()} notifications.`}
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((row) => {
-                    const badge = statusBadge(row.status)
-                    return (
-                      <tr
-                        key={row.id}
-                        className="border-b border-[var(--border-default)] last:border-b-0"
-                      >
-                        <td className="px-4 py-3 font-mono text-[var(--text-tertiary)] tabular-nums">
-                          #{row.sequence_number}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Bell className="h-3.5 w-3.5 text-[var(--text-tertiary)]" />
-                            <span className="text-[var(--text-primary)] font-medium">
-                              {humanType(row.notification_type)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-[var(--text-secondary)]">
-                          <div className="text-[var(--text-primary)]">
-                            {row.user_name ?? row.user_email ?? row.user_id.slice(0, 8)}
-                          </div>
-                          {row.user_email && (
-                            <div className="text-[11px] text-[var(--text-tertiary)]">
-                              {row.user_email}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant={badge.variant} size="sm" dot>
-                            {badge.label}
-                          </Badge>
-                        </td>
-                        <td
-                          className={clsx(
-                            'px-4 py-3 font-medium tabular-nums',
-                            row.retry_count >= 3
-                              ? 'text-danger'
-                              : 'text-[var(--text-secondary)]',
-                          )}
-                        >
-                          {row.retry_count}
-                        </td>
-                        <td className="px-4 py-3 text-[var(--text-secondary)] tabular-nums">
-                          {formatLatency(row.latency_ms)}
-                        </td>
-                        <td className="px-4 py-3 text-[var(--text-tertiary)] tabular-nums">
-                          {formatTime(row.last_sent_at)}
-                        </td>
-                        <td className="px-4 py-3 text-[var(--text-tertiary)] tabular-nums">
-                          {formatTime(row.acked_at)}
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable
+            columns={columns}
+            rows={filtered}
+            rowKey={(row) => row.id}
+            empty={tableEmpty}
+          />
         </Card>
         {total > PAGE_SIZE && (
           <p className="mt-2 text-[11px] text-[var(--text-tertiary)] text-right">

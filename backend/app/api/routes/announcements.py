@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 
 from app.api.deps import CurrentUser, DbSession, require_role
 from app.schemas.announcement import (
@@ -48,8 +48,13 @@ def create_announcement(
     data: AnnouncementCreate,
     db: DbSession,
     current_user: CurrentUser,
+    background: BackgroundTasks,
 ) -> AnnouncementResponse:
-    return announcement_service.create_announcement(db, data, current_user)
+    resp = announcement_service.create_announcement(db, data, current_user)
+    # Fan out notifications to students after the response is sent — keeps the
+    # POST fast even when the DB is remote (one write per student).
+    background.add_task(announcement_service.notify_students_for_announcement, resp.id)
+    return resp
 
 
 @router.patch(

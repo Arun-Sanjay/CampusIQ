@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { ImageZoomModal } from '../../ui'
 
 export interface MermaidDiagramProps {
   /** Raw Mermaid syntax (e.g. "flowchart TD\nA-->B"). */
@@ -53,6 +54,7 @@ export default function MermaidDiagram({ source, isStreaming }: MermaidDiagramPr
   const containerRef = useRef<HTMLDivElement>(null)
   const [svg, setSvg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [open, setOpen] = useState(false) // tap-to-zoom (mobile-friendly full-size view)
 
   useEffect(() => {
     if (isStreaming) return
@@ -112,12 +114,28 @@ export default function MermaidDiagram({ source, isStreaming }: MermaidDiagramPr
   }
 
   return (
-    <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 my-3 overflow-x-auto">
+    <>
       <div
         ref={containerRef}
-        className="mermaid-host flex justify-center"
+        role="button"
+        tabIndex={0}
+        aria-label="Tap to zoom diagram"
+        onClick={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setOpen(true)
+          }
+        }}
+        className="mermaid-host flex justify-center rounded-lg border border-[var(--border-default)] bg-[var(--bg-elevated)] p-4 my-3 overflow-hidden md:overflow-x-auto cursor-zoom-in"
         dangerouslySetInnerHTML={{ __html: svg }}
       />
-    </div>
+      <ImageZoomModal isOpen={open} onClose={() => setOpen(false)}>
+        <div
+          className="mermaid-host w-full flex justify-center"
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
+      </ImageZoomModal>
+    </>
   )
 }

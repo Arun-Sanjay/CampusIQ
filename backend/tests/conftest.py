@@ -23,6 +23,15 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./_test_should_be_overridden.db
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-do-not-use-in-prod")
 os.environ.setdefault("AUDIO_RETENTION_DAYS", "7")
 os.environ.setdefault("AUDIO_CLEANUP_INTERVAL_HOURS", "0")  # disable loop in tests
+# Coding suite runs against the 5 deterministic in-app-judge problems only —
+# the full 376-problem curriculum is production data, not a test fixture.
+os.environ.setdefault("SEED_DSA_CURRICULUM", "false")
+# Force the live voice-interview agent OFF in tests so nothing ever reaches the
+# real ElevenLabs API (a developer .env may have real keys). The live-interview
+# tests mock the agent boundary explicitly. Assigned (not setdefault) so a .env
+# value can't re-enable it.
+os.environ["ELEVENLABS_API_KEY"] = ""
+os.environ["ELEVENLABS_AGENT_ID"] = ""
 
 from app.api.deps import DbSession, get_db  # noqa: E402
 from app.core.database import Base  # noqa: E402
@@ -109,6 +118,7 @@ def _signup_payload(role: str, suffix: str | None = None) -> dict:
     suffix = suffix or uuid.uuid4().hex[:8]
     return {
         "email": f"{role}-{suffix}@campusiq.dev",
+        "username": f"{role}{suffix}",  # unique, valid handle (a-z0-9)
         "password": "TestPass123",
         "full_name": f"{role.title()} {suffix}",
         "role": role,

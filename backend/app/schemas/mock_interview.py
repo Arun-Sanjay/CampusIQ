@@ -80,27 +80,49 @@ class InterviewTurnResponse(BaseModel):
     interview_completed: bool
 
 
-class InterviewVoiceTurnResponse(BaseModel):
-    """Voice-mode response — adds the Whisper transcription and (optional)
-    ElevenLabs audio URL for the assistant's reply."""
-    session: InterviewSessionResponse
-    assistant_message: str
-    round_transitioned: bool
-    interview_completed: bool
-    transcribed_text: str
-    assistant_audio_url: str | None = None
-    assistant_voice_id: str | None = None
-
-
 class VoiceCapabilitiesResponse(BaseModel):
     """Reports to the UI which voice APIs are currently configured.
 
     The frontend calls this at setup so we can grey out voice mode when
-    the server doesn't have the necessary keys, instead of letting the
-    student record audio and then getting a 503 back."""
-    asr_available: bool       # Whisper is reachable
-    tts_available: bool       # ElevenLabs is reachable
+    the server can't run it, instead of letting the student start and then
+    getting a 503 back. `agent_available` gates the live conversational
+    voice interview (the primary voice path)."""
+    asr_available: bool       # Scribe / Whisper is reachable
+    tts_available: bool       # ElevenLabs TTS is reachable
+    agent_available: bool     # ElevenLabs Conversational AI agent is configured
     voice_by_round: dict[int, str]  # round number → voice ID
+
+
+# ── Live voice mode — ElevenLabs Conversational AI (Agents) ──
+
+
+class LiveRoundStartResponse(BaseModel):
+    """Everything the browser needs to open the round's live agent session.
+
+    The signed URL keeps the `xi-api-key` server-side; the override fields are
+    passed straight into `conversation.startSession({ signedUrl, overrides })`
+    so a single shared agent becomes the right interviewer for this round."""
+    round_number: int
+    round_name: str
+    signed_url: str
+    voice_id: str
+    language: str = "en"
+    system_prompt: str   # → overrides.agent.prompt.prompt
+    first_message: str   # → overrides.agent.firstMessage
+
+
+class LiveRoundFinalizeRequest(BaseModel):
+    conversation_id: str = Field(..., min_length=1, max_length=200)
+
+
+class LiveRoundFinalizeResponse(BaseModel):
+    """Returned immediately after a round ends. Grading runs in the background
+    (poll `GET /interviews/{id}` until the round's `avg_score` appears, and
+    until `status == "completed"` after the final round)."""
+    round_number: int
+    grading: bool                       # true → a background grade is in flight
+    interview_completing: bool          # true → final round; debrief is being generated
+    session: InterviewSessionResponse
 
 
 class InterviewSessionListRow(BaseModel):

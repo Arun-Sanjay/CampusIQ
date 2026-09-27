@@ -257,22 +257,26 @@ export default function CodingProblemPage() {
   }
 
   const solved = problem.user_status === 'solved'
+  // Curriculum (LeetCode-only) problems have no in-app judge — hide the editor.
+  const showEditor = problem.has_editor
+  const backTo = problem.pattern_slug ? `/student/coding/pattern/${problem.pattern_slug}` : '/student/coding'
+  const backLabel = problem.pattern_name ?? 'Back'
 
   return (
-    <div className="flex flex-col h-[calc(100vh-7rem)]">
+    <div className="flex flex-col h-[calc(100dvh-7rem)]">
       {/* Top action bar: back · view toggle · LeetCode + I-solved-it */}
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Link
-            to="/student/coding"
+            to={backTo}
             className="inline-flex items-center gap-1 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
           >
-            <ArrowLeft className="h-4 w-4" /> Back
+            <ArrowLeft className="h-4 w-4" /> {backLabel}
           </Link>
-          <ViewToggle view={view} onChange={setView} />
+          {showEditor && <ViewToggle view={view} onChange={setView} />}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <a
             href={problem.leetcode_url}
             target="_blank"
@@ -341,7 +345,7 @@ export default function CodingProblemPage() {
         </section>
 
         <section className="flex flex-col min-h-0">
-          {view === 'editor' ? (
+          {view === 'editor' && showEditor ? (
             <>
               <ActionBar
                 running={running}

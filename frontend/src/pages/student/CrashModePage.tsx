@@ -255,8 +255,8 @@ export default function CrashModePage() {
           <CardHeader>
             <CardTitle>Crash Plan Inputs</CardTitle>
           </CardHeader>
-          <div className="grid grid-cols-12 gap-3 items-end">
-            <div className="col-span-6">
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+            <div className="sm:col-span-6">
               <CardLabel>Target Role / Company</CardLabel>
               <Input
                 value={targetInput}
@@ -264,7 +264,7 @@ export default function CrashModePage() {
                 placeholder="Google SWE"
               />
             </div>
-            <div className="col-span-3">
+            <div className="sm:col-span-3">
               <CardLabel>Days Until Interview</CardLabel>
               <Input
                 type="number"
@@ -276,7 +276,7 @@ export default function CrashModePage() {
                 }
               />
             </div>
-            <div className="col-span-3">
+            <div className="sm:col-span-3">
               <Button onClick={handleApply} disabled={loading} className="w-full">
                 {loading ? (
                   <span className="inline-flex items-center gap-2">

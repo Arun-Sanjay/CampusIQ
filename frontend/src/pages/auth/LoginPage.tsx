@@ -7,11 +7,11 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  AtSign,
   BookOpen,
   ChevronRight,
   GraduationCap,
   Lock,
-  Mail,
   Shield,
   type LucideIcon,
 } from 'lucide-react'
@@ -67,7 +67,7 @@ export default function LoginPage() {
   const setSession = useAuthStore((s) => s.setSession)
 
   const [pickedRole, setPickedRole] = useState<UserRole | null>(null)
-  const [form, setForm] = useState({ email: '', password: '' })
+  const [form, setForm] = useState({ identifier: '', password: '' })
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -79,7 +79,7 @@ export default function LoginPage() {
     setError(null)
     setLoading(true)
     try {
-      const response = await authApi.login(form.email.trim(), form.password)
+      const response = await authApi.login(form.identifier.trim(), form.password)
       if (response.user.role !== pickedRole) {
         setError(
           `This account is registered as a ${response.user.role}, not a ${pickedRole}.` +
@@ -107,14 +107,14 @@ export default function LoginPage() {
   const goBackToRoles = () => {
     setPickedRole(null)
     setError(null)
-    setForm({ email: '', password: '' })
+    setForm({ identifier: '', password: '' })
   }
 
   return (
     <div className="landing-theme">
       <div
         style={{
-          minHeight: '100vh',
+          minHeight: '100dvh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -315,15 +315,15 @@ export default function LoginPage() {
                 )}
 
                 <MarketingInput
-                  label="Email"
-                  type="email"
-                  icon={Mail}
-                  placeholder="you@college.edu"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  label="Email or username"
+                  type="text"
+                  icon={AtSign}
+                  placeholder="you@college.edu or your.handle"
+                  value={form.identifier}
+                  onChange={(e) => setForm({ ...form, identifier: e.target.value })}
                   required
                   disabled={loading}
-                  autoComplete="email"
+                  autoComplete="username"
                 />
                 <MarketingInput
                   label="Password"

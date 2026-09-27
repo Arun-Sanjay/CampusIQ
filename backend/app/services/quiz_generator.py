@@ -21,7 +21,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.content import DocumentChunk
-from app.models.quiz import Difficulty, Question, QuestionType, Quiz
+from app.models.quiz import CIEComponent, Difficulty, Question, QuestionType, Quiz, QuizMode
 from app.models.user import Document, Subject, User, UserRole
 from app.services import claude_client
 
@@ -54,6 +54,16 @@ CRITICAL OUTPUT RULES:
 - Return only the JSON object, nothing else."""
 
 
+TEST_EXTRA_RULES = """
+This is a PROCTORED TEST (not a practice quiz). In ADDITION to the keys above, each
+question object MUST also include:
+    "marks" (integer — the marks this question is worth),
+    "co" (string — one of "CO1","CO2","CO3","CO4","CO5"; the mapped course outcome),
+    "bloom" (string — one of "L1","L2","L3","L4","L5","L6"; Bloom's level)
+Distribute the marks so they sum to approximately {target} total. Spread questions
+across multiple COs and Bloom levels to mirror a real exam blueprint."""
+
+
 @dataclass
 class GeneratedQuestion:
     question_text: str
@@ -62,6 +72,9 @@ class GeneratedQuestion:
     explanation: str
     difficulty: Difficulty
     topic: str
+    marks: int = 1
+    co: str | None = None
+    bloom: str | None = None
 
 
 def _validate_teacher_owns_subject(db: Session, subject_id: uuid.UUID, user: User) -> Subject:
@@ -177,6 +190,16 @@ def _parse_response(raw: str) -> tuple[str, list[GeneratedQuestion]]:
                 # Last resort: prepend to options so the answer is reachable
                 options = [correct, *options[:3]]
 
+        co = str(q.get("co") or "").strip().upper() or None
+        if co and co not in {"CO1", "CO2", "CO3", "CO4", "CO5"}:
+            co = None
+        bloom = str(q.get("bloom") or "").strip().upper() or None
+        if bloom and bloom not in {"L1", "L2", "L3", "L4", "L5", "L6"}:
+            bloom = None
+        try:
+            marks = max(1, int(q.get("marks") or 1))
+        except (TypeError, ValueError):
+            marks = 1
         questions.append(
             GeneratedQuestion(
                 question_text=text,
@@ -185,6 +208,9 @@ def _parse_response(raw: str) -> tuple[str, list[GeneratedQuestion]]:
                 explanation=str(q.get("explanation") or "").strip(),
                 difficulty=_parse_difficulty(q.get("difficulty")),
                 topic=(str(q.get("topic") or "General")[:50]).strip(),
+                marks=marks,
+                co=co,
+                bloom=bloom,
             )
         )
 
@@ -202,6 +228,11 @@ def generate_quiz(
     num_questions: int,
     difficulty: Difficulty,
     topic_hint: str | None = None,
+    mode: str = "practice",
+    total_marks_target: int | None = None,
+    cie_component: str | None = None,
+    requires_proctoring: bool | None = None,
+    time_limit_minutes: int | None = None,
 ) -> Quiz:
     """Generate and persist a draft quiz from course material."""
     subject = _validate_teacher_owns_subject(db, subject_id, user)
@@ -222,6 +253,12 @@ def generate_quiz(
             detail="Quiz generator unavailable: ANTHROPIC_API_KEY is not configured.",
         )
 
+    is_test = mode == "test"
+    system = QUIZ_GENERATION_SYSTEM
+    if is_test:
+        target = total_marks_target or num_questions * 5
+        system = QUIZ_GENERATION_SYSTEM + TEST_EXTRA_RULES.format(target=target)
+
     context = _format_context(chunks)
     user_prompt = (
         f"Subject: {subject.code} — {subject.name}\n"
@@ -235,9 +272,9 @@ def generate_quiz(
     )
 
     raw = claude_client.generate_completion(
-        system=QUIZ_GENERATION_SYSTEM,
+        system=system,
         user_message=user_prompt,
-        max_tokens=2200,
+        max_tokens=3000 if is_test else 2200,
         temperature=0.5,
     )
     if not raw:
@@ -250,16 +287,22 @@ def generate_quiz(
     # Trim to the requested count if Claude over-generated
     generated = generated[:num_questions]
 
+    total_marks = sum(gq.marks for gq in generated) if is_test else None
     quiz = Quiz(
         subject_id=subject.id,
         document_id=document_id,
         created_by_id=user.id,
         title=title,
-        description=f"AI-generated quiz from {subject.code}",
+        description=f"AI-generated {'test' if is_test else 'quiz'} from {subject.code}",
         difficulty=difficulty,
-        time_limit_minutes=max(num_questions * 2, 5),
+        time_limit_minutes=time_limit_minutes or max(num_questions * 2, 5),
         is_published=False,
         is_ai_generated=True,
+        mode=QuizMode.TEST if is_test else QuizMode.PRACTICE,
+        max_attempts=1 if is_test else 0,
+        requires_proctoring=(requires_proctoring if requires_proctoring is not None else is_test),
+        cie_component=CIEComponent(cie_component) if cie_component else None,
+        total_marks=total_marks,
     )
     db.add(quiz)
     db.flush()  # gives us quiz.id without committing
@@ -275,6 +318,9 @@ def generate_quiz(
             explanation=gq.explanation or None,
             difficulty=gq.difficulty,
             topic=gq.topic,
+            marks=gq.marks,
+            co=gq.co,
+            bloom=gq.bloom,
         )
         db.add(q)
 

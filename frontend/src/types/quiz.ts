@@ -5,6 +5,8 @@
 
 export type Difficulty = 'easy' | 'medium' | 'hard'
 export type QuestionType = 'mcq' | 'short_answer'
+export type QuizMode = 'practice' | 'test'
+export type CIEComponent = 'quiz_1' | 'quiz_2' | 'test_1' | 'test_2'
 
 export interface QuestionStudentView {
   id: string
@@ -14,6 +16,9 @@ export interface QuestionStudentView {
   options: string[] | null
   difficulty: Difficulty
   topic: string | null
+  marks: number
+  co: string | null
+  bloom: string | null
 }
 
 export interface QuestionTeacherView extends QuestionStudentView {
@@ -38,6 +43,15 @@ export interface QuizSummary {
   avg_score: number | null
   subject_code: string | null
   subject_name: string | null
+  mode: QuizMode
+  max_attempts: number
+  requires_proctoring: boolean
+  available_from: string | null
+  available_until: string | null
+  cie_component: CIEComponent | null
+  total_marks: number | null
+  attempts_used: number
+  can_attempt: boolean
 }
 
 export interface QuizForStudent extends QuizSummary {
@@ -54,6 +68,11 @@ export interface QuizGenerateRequest {
   topic_hint?: string | null
   num_questions?: number
   difficulty?: Difficulty
+  mode?: QuizMode
+  total_marks_target?: number | null
+  cie_component?: CIEComponent | null
+  requires_proctoring?: boolean | null
+  time_limit_minutes?: number | null
 }
 
 export interface QuestionUpdate {
@@ -82,9 +101,21 @@ export interface QuestionAnswer {
   student_answer: string
 }
 
+export interface ProctorSummary {
+  tab_switch_count: number
+  fullscreen_exits: number
+  copy_paste_attempts: number
+  face_absent_seconds: number
+  face_multiple_seconds: number
+  auto_submitted: boolean
+}
+
 export interface QuizAttemptCreate {
   answers: QuestionAnswer[]
   time_taken_seconds?: number | null
+  started_attempt_id?: string | null
+  proctor?: ProctorSummary | null
+  violations?: Record<string, unknown>[] | null
 }
 
 export interface GradedAnswer {
@@ -96,6 +127,16 @@ export interface GradedAnswer {
   topic: string | null
   difficulty: Difficulty
   explanation: string | null
+  marks_awarded: number
+  marks_possible: number
+  co: string | null
+}
+
+export interface QuizCOAttainmentRow {
+  co: string
+  obtained: number
+  possible: number
+  pct: number
 }
 
 export interface QuizAttemptResponse {
@@ -110,6 +151,52 @@ export interface QuizAttemptResponse {
   graded_answers: GradedAnswer[]
   weak_topics: string[]
   next_difficulty_recommendation: Difficulty | null
+  mode: QuizMode
+  marks_obtained: number | null
+  marks_possible: number | null
+  is_proctored: boolean
+  auto_submitted: boolean
+  co_attainment: QuizCOAttainmentRow[]
+}
+
+export interface StartAttemptResponse {
+  attempt_id: string
+  started_at: string
+  server_now: string
+  time_limit_seconds: number | null
+  requires_proctoring: boolean
+  mode: QuizMode
+}
+
+export interface ProctorEventIn {
+  type:
+    | 'tab_switch' | 'blur' | 'fullscreen_exit' | 'copy' | 'paste'
+    | 'contextmenu' | 'face_absent' | 'face_multiple' | 'resume' | 'devtools'
+  seconds?: number | null
+  detail?: Record<string, unknown> | null
+}
+
+export interface ProctorReportRow {
+  attempt_id: string
+  student_id: string
+  student_name: string
+  marks_obtained: number | null
+  marks_possible: number | null
+  score: number
+  tab_switch_count: number
+  fullscreen_exits: number
+  copy_paste_attempts: number
+  face_absent_seconds: number
+  face_multiple_seconds: number
+  auto_submitted: boolean
+  violations: Record<string, unknown>[]
+  completed_at: string
+}
+
+export interface ProctorReport {
+  quiz_id: string
+  quiz_title: string
+  rows: ProctorReportRow[]
 }
 
 export interface AttemptHistoryRow {

@@ -20,6 +20,7 @@ from app.models.chat import ChatMessage, ChatSession, ChatType, MessageRole
 from app.models.coding import (
     CodingDifficulty,
     CodingLanguage,
+    CodingPattern,
     CodingProblem,
     CodingSubmission,
     CodingSubmissionStatus,
@@ -43,6 +44,25 @@ from app.models.gamification import (
     XPEvent,
     XPEventType,
 )
+from app.models.grading import (
+    AnswerSheet,
+    AnswerSheetStatus,
+    CourseOutcome,
+    Exam,
+    ExamKind,
+    ExamPart,
+    ExamQuestion,
+    ExamResult,
+    GateFailure,
+    LetterGrade,
+    Leniency,
+    QuestionGrade,
+    ResultSource,
+    SchemeStatus,
+    SemesterResult,
+    SubjectGrade,
+    SubjectGradeConfig,
+)
 from app.models.placement import (
     ApplicationStatus,
     ConfidenceSession,
@@ -56,13 +76,23 @@ from app.models.placement import (
     MockInterviewSession,
     Resume,
 )
-from app.models.quiz import Difficulty, Question, QuestionType, Quiz, QuizAttempt
+from app.models.quiz import (
+    CIEComponent,
+    Difficulty,
+    Question,
+    QuestionType,
+    Quiz,
+    QuizAttempt,
+    QuizMode,
+)
 from app.models.user import (
     College,
     Document,
     DocumentStatus,
     StudentProfile,
     Subject,
+    SubjectCategory,
+    SubjectEnrollment,
     TeacherProfile,
     User,
     UserRole,
@@ -77,6 +107,8 @@ __all__ = [
     "StudentProfile",
     "TeacherProfile",
     "Subject",
+    "SubjectCategory",
+    "SubjectEnrollment",
     "Document",
     "DocumentStatus",
     # Content
@@ -92,6 +124,7 @@ __all__ = [
     "ChatType",
     "MessageRole",
     # Coding (V1 platform)
+    "CodingPattern",
     "CodingProblem",
     "CodingSubmission",
     "CodingDifficulty",
@@ -103,6 +136,26 @@ __all__ = [
     "QuizAttempt",
     "Difficulty",
     "QuestionType",
+    "QuizMode",
+    "CIEComponent",
+    # Grading (AI auto-grader + grade engine)
+    "CourseOutcome",
+    "SubjectGradeConfig",
+    "Exam",
+    "ExamQuestion",
+    "AnswerSheet",
+    "QuestionGrade",
+    "ExamResult",
+    "SubjectGrade",
+    "SemesterResult",
+    "ExamKind",
+    "ExamPart",
+    "Leniency",
+    "SchemeStatus",
+    "AnswerSheetStatus",
+    "ResultSource",
+    "LetterGrade",
+    "GateFailure",
     # Community
     "Doubt",
     "DoubtAnswer",

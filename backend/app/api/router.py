@@ -14,7 +14,10 @@ from app.api.routes import (
     confidence,
     dashboard,
     documents,
+    enrollment,
     gamification,
+    grades,
+    grading,
     interviews,
     jobs,
     notifications,
@@ -28,6 +31,7 @@ from app.api.routes import (
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(subjects.router, prefix="/subjects", tags=["subjects"])
+api_router.include_router(enrollment.router, prefix="/enrollments", tags=["enrollments"])
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
 api_router.include_router(
     college_documents.router,
@@ -48,6 +52,8 @@ api_router.include_router(confidence.router, prefix="/confidence", tags=["confid
 api_router.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
 api_router.include_router(community.router, prefix="/community", tags=["community"])
 api_router.include_router(gamification.router, prefix="/gamification", tags=["gamification"])
+api_router.include_router(grading.router, prefix="/grading", tags=["grading"])
+api_router.include_router(grades.router, prefix="/grades", tags=["grades"])
 api_router.include_router(algorithms.router, prefix="/algorithms", tags=["algorithms"])
 api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
 api_router.include_router(notifications.router, prefix="/ws", tags=["websockets"])
