@@ -16,6 +16,12 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(__dirname, './src'),
       },
+      // Force a single React instance so @elevenlabs/react's hooks
+      // share the dispatcher with the app's render tree.
+      dedupe: ['react', 'react-dom', 'react/jsx-runtime'],
+    },
+    optimizeDeps: {
+      include: ['@elevenlabs/react', 'react', 'react-dom'],
     },
     server: {
       proxy: {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useConversation } from '@elevenlabs/react'
+import { ConversationProvider, useConversation } from '@elevenlabs/react'
 import {
   ArrowLeft,
   Bot,
@@ -61,9 +61,17 @@ interface CallControlsProps {
   onCallEnded: () => void
 }
 
+interface LiveMessage {
+  role: 'agent' | 'user'
+  text: string
+  timestamp: number
+}
+
 function CallControls({ onCallEnded }: CallControlsProps) {
   const [error, setError] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
+  const [messages, setMessages] = useState<LiveMessage[]>([])
+  const transcriptRef = useRef<HTMLDivElement>(null)
 
   const conversation = useConversation({
     onConnect: () => setError(null),
@@ -74,15 +82,28 @@ function CallControls({ onCallEnded }: CallControlsProps) {
     onError: (e) => {
       setError(typeof e === 'string' ? e : 'Connection error — try again')
     },
+    onMessage: ({ message, source }) => {
+      if (!message || !message.trim()) return
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: source === 'ai' ? 'agent' : 'user',
+          text: message,
+          timestamp: Date.now(),
+        },
+      ])
+    },
   })
 
-  const status = conversation.status as
-    | 'disconnected'
-    | 'connecting'
-    | 'connected'
-    | 'disconnecting'
+  // Auto-scroll the live transcript to the bottom as new lines arrive
+  useEffect(() => {
+    if (transcriptRef.current) {
+      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
+    }
+  }, [messages.length])
 
-  const isIdle = status === 'disconnected'
+  const status = conversation.status
+  const isIdle = status === 'disconnected' || status === 'error'
   const isConnecting = status === 'connecting' || starting
   const isLive = status === 'connected'
   const isAgentSpeaking = isLive && conversation.isSpeaking
@@ -91,10 +112,11 @@ function CallControls({ onCallEnded }: CallControlsProps) {
   const handleStart = useCallback(async () => {
     setError(null)
     setStarting(true)
+    setMessages([])
     try {
       // Pre-request mic so the prompt isn't buried inside the SDK call
       await navigator.mediaDevices.getUserMedia({ audio: true })
-      await conversation.startSession({ agentId: AGENT_ID, connectionType: 'websocket' })
+      conversation.startSession({ agentId: AGENT_ID, connectionType: 'websocket' })
     } catch (e) {
       setError(
         e instanceof Error
@@ -108,9 +130,9 @@ function CallControls({ onCallEnded }: CallControlsProps) {
     }
   }, [conversation])
 
-  const handleEnd = useCallback(async () => {
+  const handleEnd = useCallback(() => {
     try {
-      await conversation.endSession()
+      conversation.endSession()
     } catch {
       // already disconnected
     }
@@ -233,7 +255,7 @@ function CallControls({ onCallEnded }: CallControlsProps) {
         </div>
       </div>
 
-      <div className="text-center mb-5">
+      <div className="text-center mb-4">
         <p
           className="text-sm font-medium"
           style={{ color: 'var(--text-primary)' }}
@@ -248,6 +270,49 @@ function CallControls({ onCallEnded }: CallControlsProps) {
             ? 'You can interrupt at any time'
             : 'Speak naturally — pause when done'}
         </p>
+      </div>
+
+      {/* Live transcript — appears once the first message arrives */}
+      <div
+        ref={transcriptRef}
+        className="w-full max-w-md rounded-xl px-3 py-3 mb-4 overflow-y-auto space-y-2 transition-opacity"
+        style={{
+          maxHeight: 220,
+          minHeight: messages.length > 0 ? 80 : 0,
+          opacity: messages.length > 0 ? 1 : 0,
+          background: 'var(--bg-secondary)',
+          border: messages.length > 0 ? '1px solid var(--border-default)' : '1px solid transparent',
+        }}
+      >
+        {messages.map((m, i) => {
+          const isAgent = m.role === 'agent'
+          return (
+            <div key={i} className={`flex gap-2 ${isAgent ? '' : 'justify-end'}`}>
+              <div
+                className="max-w-[88%] rounded-lg px-2.5 py-1.5 text-xs leading-relaxed"
+                style={
+                  isAgent
+                    ? {
+                        background: 'var(--bg-tertiary)',
+                        color: 'var(--text-primary)',
+                      }
+                    : {
+                        background: '#7C3AED',
+                        color: 'white',
+                      }
+                }
+              >
+                <div
+                  className="text-[9px] uppercase tracking-wider mb-0.5 opacity-70 font-semibold"
+                  style={isAgent ? { color: 'var(--text-tertiary)' } : { color: 'rgba(255,255,255,0.85)' }}
+                >
+                  {isAgent ? 'Adam' : 'You'}
+                </div>
+                {m.text}
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       <motion.button
@@ -542,7 +607,9 @@ export default function AgentInterviewPage() {
                 boxShadow: 'var(--shadow-elevated)',
               }}
             >
-              <CallControls onCallEnded={handleCallEnded} />
+              <ConversationProvider>
+                <CallControls onCallEnded={handleCallEnded} />
+              </ConversationProvider>
             </div>
 
             {/* Side panel — pre-flight + structure */}
